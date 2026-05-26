@@ -778,7 +778,7 @@ function _placePiece(board, state) {
   el.style.left=left; el.style.top=top; el.style.width=size; el.style.height=size;
   el.style.background=`radial-gradient(circle at 38% 35%,${_lighten(c,.4)},${c})`;
   el.style.boxShadow=`0 0 10px ${g}`;
-  el.innerHTML=`<img src="${state.piece.sym||'reine_guepe_512.png'}" alt="" style="width:105%;height:105%;object-fit:contain;position:absolute;top:-2.5%;left:-2.5%;pointer-events:none;">`;
+  el.innerHTML=`<img src="${state.piece.sym||'reine_guepe_512.png'}" alt="" style="width:110%;height:110%;object-fit:contain;position:absolute;top:-5%;left:-5%;pointer-events:none;">`; 
 }
 
 function _movePiece(board,state,prevR,prevC){
@@ -807,7 +807,7 @@ function _placeEnemy(board, enemy, eid, diagIdx) {
   }
   const {left,top,size}=_px(board,enemy.r,enemy.c);
   el.style.left=left; el.style.top=top; el.style.width=size; el.style.height=size;
-  el.innerHTML=`<img src="${enemy.sym||'fourmi_512.png'}" alt="" style="width:105%;height:105%;object-fit:contain;position:absolute;top:-2.5%;left:-2.5%;pointer-events:none;">`;
+  el.innerHTML=`<img src="${enemy.sym||'fourmi_512.png'}" alt="" style="width:110%;height:110%;object-fit:contain;position:absolute;top:-5%;left:-5%;pointer-events:none;">`;
   board.appendChild(el);
 }
 
@@ -817,7 +817,7 @@ function _placeCorpse(board, pos, n) {
   el.style.cssText='position:absolute;border-radius:50%;display:flex;align-items:center;justify-content:center;z-index:8;pointer-events:none;filter:grayscale(1) brightness(.7);opacity:.9;border:3px solid rgba(255,255,255,.95);box-shadow:0 0 10px rgba(255,255,255,.7),0 0 20px rgba(255,255,255,.3);animation:corpseGlow 1.2s ease-in-out infinite;transition:opacity .3s;';
   const {left,top,size}=_px(board,pos.r,pos.c);
   el.style.left=left; el.style.top=top; el.style.width=size; el.style.height=size;
-  el.innerHTML=`<img src="${pos.sym||'fourmi_512.png'}" alt="" style="width:105%;height:105%;object-fit:contain;position:absolute;top:-2.5%;left:-2.5%;pointer-events:none;">`;
+  el.innerHTML=`<img src="${pos.sym||'fourmi_512.png'}" alt="" style="width:110%;height:110%;object-fit:contain;position:absolute;top:-5%;left:-5%;pointer-events:none;">`;
   board.appendChild(el);
 }
 
