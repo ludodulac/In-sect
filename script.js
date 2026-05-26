@@ -629,24 +629,20 @@ function drawPiece(cv, color, sym, dead, selected) {
     }
   }
 
-  // Image PNG centrée dans le cercle, remplissant 88% du diamètre
+  // Image PNG pleine taille — occupe tout le canvas (le fond rond est déjà dessiné dessous)
+  // Pas de clip : l'image PNG a son propre fond transparent, les pattes peuvent toucher le bord
   const img = _loadImg(sym);
-  const imgSize = r * 1.76; // 88% du diamètre = r*2*.88
-  const imgX = cx - imgSize/2;
-  const imgY = cy - imgSize/2;
+  const imgSize = w; // 100% du canvas = remplit complètement le disque
+  const imgX = 0;
+  const imgY = 0;
 
-  // Clip circulaire pour que l'image reste dans le disque
-  ctx.save();
-  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.clip();
   if (dead) ctx.globalAlpha = 0.35;
 
   if (img.complete && img.naturalWidth > 0) {
     ctx.drawImage(img, imgX, imgY, imgSize, imgSize);
   } else {
-    // L'image n'est pas encore chargée : on redessine quand elle arrive
     img.onload = () => { try { drawPiece(cv, color, sym, dead, selected); } catch(e){} };
   }
-  ctx.restore();
   ctx.globalAlpha = 1;
 }
 
