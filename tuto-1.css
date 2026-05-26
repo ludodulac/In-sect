@@ -1,0 +1,426 @@
+/* ══════════════════════════════════════
+   TUTORIEL IN-SECT — style
+══════════════════════════════════════ */
+.tuto-box {
+  border-radius: 18px 18px 0 0;
+  border-color: rgba(128,80,255,.5);
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.tuto-header {
+  background: linear-gradient(180deg, rgba(20,10,40,.98), rgba(12,8,24,.95));
+  border-bottom-color: rgba(128,80,255,.25);
+}
+.tuto-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+}
+#tuto-step-label {
+  font-size: .65rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: .15em;
+  min-width: 36px;
+}
+.tuto-dots {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+.tdot-i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--border);
+  transition: all .3s cubic-bezier(.2,0,.3,1);
+  flex-shrink: 0;
+}
+.tdot-i.active {
+  background: #8050FF;
+  box-shadow: 0 0 8px rgba(128,80,255,.8);
+  width: 18px;
+  border-radius: 3px;
+}
+.tdot-i.done {
+  background: rgba(128,80,255,.4);
+}
+.tuto-track-wrap {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+  min-height: 0;
+}
+.tuto-track {
+  display: flex;
+  height: 100%;
+  transition: transform .4s cubic-bezier(.4,0,.2,1);
+  will-change: transform;
+}
+.tuto-slide {
+  flex-shrink: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 18px 12px;
+  gap: 12px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.tuto-piece-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.tuto-piece-sym {
+  font-size: 1.5rem;
+  line-height: 1;
+  background: rgba(128,80,255,.15);
+  border: 1px solid rgba(128,80,255,.25);
+  border-radius: 50%;
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: visible;
+}
+.tuto-piece-title-name {
+  font-family: 'Cinzel Decorative', serif;
+  font-size: clamp(.78rem, 3.5vw, 1rem);
+  font-weight: 900;
+  background: linear-gradient(135deg, #C0A0FF, #8050FF 50%, #D4A017);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: .04em;
+  line-height: 1.2;
+}
+/* .tuto-slide-title conservé pour intro/stakes */
+.tuto-slide-title {
+  font-family: 'Cinzel Decorative', serif;
+  font-size: clamp(.85rem, 4vw, 1.1rem);
+  font-weight: 900;
+  text-align: center;
+  background: linear-gradient(135deg, #C0A0FF, #8050FF 50%, #D4A017);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: .05em;
+  line-height: 1.2;
+}
+.tuto-board-wrap {
+  position: relative;
+  width: min(220px, 55vw);
+  height: min(220px, 55vw);
+  flex-shrink: 0;
+}
+.tuto-board {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  border: 1.5px solid rgba(128,80,255,.3);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 0 20px rgba(128,80,255,.15);
+  position: relative;
+}
+.tb-cell {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  transition: background .2s, box-shadow .2s;
+}
+.tb-cell.tl { background: #32305A; }
+.tb-cell.td { background: #06040F; }
+.tb-cell.tlab {
+  background: radial-gradient(circle, rgba(212,160,23,.5), rgba(120,80,0,.2));
+  box-shadow: inset 0 0 0 1.5px rgba(212,160,23,.8);
+}
+.tb-cell.t-move {
+  background: rgba(48,208,96,.35) !important;
+  box-shadow: inset 0 0 0 2px rgba(48,208,96,.9);
+}
+.tb-cell.t-move::after {
+  content: '';
+  position: absolute;
+  width: 28%;
+  height: 28%;
+  border-radius: 50%;
+  background: rgba(48,208,96,.9);
+  box-shadow: 0 0 8px rgba(48,208,96,1);
+  animation: tpulse .7s ease-in-out infinite alternate;
+}
+@keyframes tpulse { from { transform: scale(.8); } to { transform: scale(1.1); } }
+.tb-cell.t-kill {
+  background: rgba(255,48,80,.35) !important;
+  box-shadow: inset 0 0 0 2px rgba(255,48,80,.95);
+  animation: tpulseKill .5s ease-in-out infinite;
+}
+@keyframes tpulseKill {
+  0%,100% { box-shadow: inset 0 0 0 2px rgba(255,48,80,.95); }
+  50%      { box-shadow: inset 0 0 0 2px #FF3050, 0 0 12px rgba(255,48,80,.6); }
+}
+.tb-cell.t-special {
+  background: rgba(255,180,40,.3) !important;
+  box-shadow: inset 0 0 0 2px rgba(255,180,40,.9);
+}
+.tb-cell.t-necro {
+  background: rgba(160,100,255,.3) !important;
+  box-shadow: inset 0 0 0 2px rgba(160,100,255,.9);
+  animation: tpulsePl .6s ease-in-out infinite;
+}
+@keyframes tpulsePl {
+  0%,100% { box-shadow: inset 0 0 0 2px rgba(160,100,255,.9); }
+  50%      { box-shadow: inset 0 0 0 2px #A064FF, 0 0 10px rgba(160,100,255,.6); }
+}
+.tb-cell.t-active {
+  box-shadow: 0 0 0 2.5px #A070FF, 0 0 14px rgba(160,112,255,.7) !important;
+  background: rgba(120,70,220,.4) !important;
+  z-index: 5;
+}
+.tb-piece {
+  position: absolute;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  pointer-events: none;
+  transition: left .5s cubic-bezier(.4,0,.2,1), top .5s cubic-bezier(.4,0,.2,1);
+}
+.tb-piece.yellow { background: radial-gradient(circle at 38% 35%, #FFE060, #D4A010); box-shadow: 0 0 10px rgba(240,192,48,.6); }
+.tb-piece.enemy  { background: radial-gradient(circle at 38% 35%, #FF6070, #C02030); box-shadow: 0 0 8px rgba(255,48,80,.4); }
+.tb-piece.dead-corps { background: transparent; border: 2px solid rgba(255,255,255,.25); opacity: .4; }
+.tuto-desc {
+  font-size: .82rem;
+  color: rgba(224,220,255,.75);
+  line-height: 1.65;
+  text-align: center;
+  max-width: 340px;
+}
+.tuto-desc b { color: #C0A0FF; font-weight: 800; }
+.tuto-desc .th-green { color: #50E080; font-weight: 700; }
+.tuto-desc .th-red   { color: #FF5070; font-weight: 700; }
+.tuto-desc .th-gold  { color: var(--gold-l); font-weight: 700; }
+.tuto-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+}
+.tuto-tag {
+  font-size: .62rem;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  padding: 3px 10px;
+  border-radius: 20px;
+  border: 1px solid;
+}
+.tuto-tag.move  { color: #50E080; border-color: rgba(48,208,96,.4); background: rgba(48,208,96,.08); }
+.tuto-tag.kill  { color: #FF5070; border-color: rgba(255,48,80,.4); background: rgba(255,48,80,.08); }
+.tuto-tag.spec  { color: #FFB830; border-color: rgba(255,184,48,.4); background: rgba(255,184,48,.08); }
+.tuto-tag.warn  { color: #F0C040; border-color: rgba(212,160,23,.4); background: rgba(212,160,23,.08); }
+.tuto-intro-icon {
+  font-size: 3.5rem;
+  animation: crownPulse 2s ease-in-out infinite;
+  filter: drop-shadow(0 0 16px rgba(212,160,23,.5));
+}
+.tuto-colony-row {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+.tuto-colony {
+  width: 42px; height: 42px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.3rem;
+  border: 2px solid;
+  animation: colonyFloat 2s ease-in-out infinite;
+}
+.tuto-colony:nth-child(2){animation-delay:.5s;}.tuto-colony:nth-child(3){animation-delay:1s;}.tuto-colony:nth-child(4){animation-delay:1.5s;}
+@keyframes colonyFloat{0%,100%{transform:translateY(0);}50%{transform:translateY(-4px);}}
+.tuto-colony.cy{border-color:var(--cy);background:rgba(240,192,48,.12);}
+.tuto-colony.cg{border-color:var(--cg);background:rgba(48,208,96,.12);}
+.tuto-colony.cb{border-color:var(--cb);background:rgba(64,144,255,.12);}
+.tuto-colony.cr{border-color:var(--cr);background:rgba(255,48,80,.12);}
+.tuto-stakes-list{list-style:none;display:flex;flex-direction:column;gap:8px;width:100%;max-width:300px;}
+.tuto-stakes-list li{display:flex;align-items:flex-start;gap:10px;font-size:.82rem;color:rgba(224,220,255,.75);line-height:1.5;}
+.tuto-stakes-list li .ico{flex-shrink:0;font-size:1.1rem;width:22px;text-align:center;}
+.tuto-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px 12px;
+  border-top: 1px solid rgba(128,80,255,.15);
+  background: rgba(8,6,16,.9);
+  flex-shrink: 0;
+}
+.tuto-nav-btn {
+  width: 44px; height: 44px;
+  border-radius: 10px;
+  border: 1.5px solid rgba(128,80,255,.35);
+  background: rgba(80,40,160,.15);
+  color: #8050FF;
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all .18s;
+  flex-shrink: 0;
+}
+.tuto-nav-btn:active{background:rgba(80,40,160,.35);transform:scale(.93);}
+.tuto-nav-btn:disabled{opacity:.2;cursor:not-allowed;}
+.tuto-cta {
+  flex: 1; height: 44px;
+  border: none; border-radius: 10px;
+  background: linear-gradient(160deg, #4020A0, #9050FF 40%, #3010A0);
+  font-family: 'Exo 2', sans-serif;
+  font-size: .88rem; font-weight: 900;
+  color: #F0E8FF; letter-spacing: .1em;
+  cursor: pointer;
+  box-shadow: 0 4px 18px rgba(128,64,255,.35);
+  transition: transform .15s;
+}
+.tuto-cta:active{transform:scale(.97);}
+.tuto-cta.last{background:linear-gradient(160deg,#3A2A00,#C08010 40%,#7A5000);box-shadow:0 4px 18px rgba(180,130,0,.3);color:#FFF0C0;}
+
+/* Disques colonies intro */
+.tuto-disc {
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  animation: colonyFloat 2s ease-in-out infinite;
+  border: 2.5px solid rgba(255,255,255,.25);
+}
+.tuto-disc:nth-child(2){animation-delay:.5s;}
+.tuto-disc:nth-child(3){animation-delay:1s;}
+.tuto-disc:nth-child(4){animation-delay:1.5s;}
+
+/* Flèches SVG de mouvement */
+.tuto-arrow-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 20;
+  overflow: visible;
+}
+.tuto-arrow-svg .arrow-move {
+  stroke: rgba(80,220,120,.85);
+  stroke-width: 2.5;
+  fill: none;
+  stroke-dasharray: 6 3;
+  animation: dashMove 0.6s linear infinite;
+}
+.tuto-arrow-svg .arrow-kill {
+  stroke: rgba(255,60,80,.9);
+  stroke-width: 2.5;
+  fill: none;
+  stroke-dasharray: 6 3;
+  animation: dashMove 0.5s linear infinite;
+}
+.tuto-arrow-svg .arrow-corpse {
+  stroke: rgba(160,100,255,.85);
+  stroke-width: 2;
+  fill: none;
+  stroke-dasharray: 5 4;
+  animation: dashMove 0.7s linear infinite reverse;
+}
+.tuto-arrow-svg .arrow-head-move { fill: rgba(80,220,120,.9); }
+.tuto-arrow-svg .arrow-head-kill { fill: rgba(255,60,80,.95); }
+.tuto-arrow-svg .arrow-head-corpse { fill: rgba(160,100,255,.9); }
+@keyframes dashMove { to { stroke-dashoffset: -18; } }
+@keyframes corpseGlow {
+  0%,100% { box-shadow: 0 0 8px rgba(255,255,255,.7), 0 0 16px rgba(255,255,255,.25); border-color: rgba(255,255,255,.9); }
+  50%     { box-shadow: 0 0 14px rgba(255,255,255,1),  0 0 28px rgba(255,255,255,.5); border-color: #ffffff; }
+}
+
+/* ── Zone de texte synchronisée sous le titre ── */
+.tuto-sync-text {
+  min-height: 2.6em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 320px;
+  text-align: center;
+  flex-shrink: 0;
+  padding: 0 4px;
+}
+.tuto-sync-text span {
+  font-size: .82rem;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: .01em;
+  opacity: 0;
+  transition: opacity .28s ease;
+  display: block;
+}
+.tuto-sync-text span.visible { opacity: 1; }
+.tuto-sync-text span.type-move    { color: #70E890; }
+.tuto-sync-text span.type-kill    { color: #FF6878; }
+.tuto-sync-text span.type-special { color: #F0C040; }
+.tuto-sync-text span.type-corpse  { color: #C090FF; }
+/* ── Boutons bottom-nav : RÈGLES & TUTO ── */
+.bnav-sec, .bnav-tuto {
+  font-family: 'Cinzel Decorative', serif;
+  font-size: clamp(.7rem, 3.5vw, .88rem);
+  font-weight: 700;
+  letter-spacing: .12em;
+  height: 48px;
+  border-radius: var(--r);
+  border: none;
+  cursor: pointer;
+  transition: transform .15s, box-shadow .15s;
+  position: relative;
+  overflow: hidden;
+}
+.bnav-sec {
+  background: var(--card);
+  border: 1.5px solid rgba(128,80,255,.3);
+  color: #A080D0;
+}
+.bnav-sec:active {
+  border-color: #8050FF;
+  color: #C0A0FF;
+  transform: scale(.96);
+}
+.bnav-tuto {
+  background: linear-gradient(160deg, #4020A0, #9050FF 40%, #7040E0 60%, #3010A0);
+  color: #F0E8FF;
+  box-shadow: 0 0 0 1px rgba(160,96,255,.25), 0 4px 20px rgba(128,64,255,.3);
+}
+.bnav-tuto::after {
+  content: '';
+  position: absolute;
+  top: 0; left: -120%;
+  width: 70%; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.18), transparent);
+  animation: shimmer 3.5s ease-in-out infinite;
+}
+.bnav-tuto:active {
+  transform: scale(.97);
+  box-shadow: 0 0 0 1px rgba(160,96,255,.4), 0 4px 28px rgba(128,64,255,.5);
+}
+
+/* ── Centrage vertical du modal tuto ── */
+#modal-tuto {
+  align-items: center;
+  padding-bottom: 0;
+}
+.tuto-box {
+  border-radius: 18px !important;
+  max-height: 90vh;
+  margin: auto;
+}
