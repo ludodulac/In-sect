@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-F46XL49C3C"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-F46XL49C3C');
+</script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>IN-SECT — L'Échiquier des Colonies</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Exo+2:ital,wght@0,400;0,600;0,700;0,900;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="tuto.css">
+</head>
+<body>
+
+<!-- Couches canvas (fond animé + effets + victoire) -->
+<canvas id="c-ambient"></canvas>
+<canvas id="c-fx"></canvas>
+<canvas id="c-victory"></canvas>
+
+<!-- ════════════════════════════════════
+     SPLASH — Écran de chargement
+════════════════════════════════════ -->
+<div id="s-splash" class="screen">
+  <!-- Image de fond plein écran -->
+  <div class="splash-bg"></div>
+  <!-- Barre de chargement en bas -->
+  <div class="splash-bottom">
+    <div class="splash-bar"><div class="splash-bar-fill"></div></div>
+    <div class="splash-sub">L'Échiquier des Colonies</div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════
+     MENU — Sélection de la partie
+════════════════════════════════════ -->
+<div id="s-menu" class="screen hidden">
+
+  <!-- En-tête logo + son -->
+  <div class="menu-header">
+    <div>
+      <div class="menu-logo">IN-SECT</div>
+      <div class="menu-sub">L'Échiquier des Colonies</div>
+    </div>
+    <button class="menu-sound" id="snd-btn" onclick="toggleMute()">🔊</button>
+  </div>
+
+  <!--
+    BARRE DE STATUT FREEMIUM
+    Affiche en permanence : parties restantes, partages effectués, badge de statut.
+    Les IDs sont lus et mis à jour par updateStatusBar() dans script.js.
+  -->
+  <div class="menu-status-bar">
+    <div class="status-left">
+      <div class="status-counter" id="status-counter">Il vous reste 20 parties</div>
+      <div class="status-shares" id="status-shares" style="display:none"></div>
+    </div>
+    <div class="status-badge free" id="status-badge" onclick="openFreemiumModal(false)" style="cursor:pointer">🆓 Gratuit</div>
+  </div>
+
+  <!-- Miniature animée du plateau selon le mode sélectionné -->
+  <div class="mode-preview" id="mode-preview"></div>
+
+  <!-- Zone de configuration -->
+  <div class="menu-config">
+
+    <!-- Choix du mode (1 IA = duel / 3 IA = guerre totale) -->
+    <div class="sec-label">Adversaires</div>
+    <div class="mode-row">
+      <button class="mbtn sel" id="mbtn-1" onclick="selMode(1)">
+        <span class="mt">1 IA</span><span class="ms">Duel</span>
+      </button>
+      <button class="mbtn" id="mbtn-3" onclick="selMode(3)">
+        <span class="mt">3 IA</span><span class="ms">Guerre totale</span>
+      </button>
+    </div>
+
+    <!-- Choix de la colonie — mode 1 IA -->
+    <div id="csel-1ia">
+      <div class="sec-label">Votre colonie</div>
+      <div class="colony-row">
+        <button class="cbtn sel" data-c="yellow" onclick="selCol('yellow')"><span class="cn">Jaune</span></button>
+        <button class="cbtn"     data-c="red"    onclick="selCol('red')"><span class="cn">Rouge</span></button>
+        <button class="cbtn"     data-c="random" onclick="selCol('random')"><span class="cn">Aléat.</span></button>
+      </div>
+    </div>
+
+    <!-- Choix de la colonie — mode 3 IA -->
+    <div id="csel-3ia" style="display:none">
+      <div class="sec-label">Votre colonie</div>
+      <div class="colony-row">
+        <button class="cbtn" data-c="yellow" onclick="selCol('yellow')"><span class="cn">Jaune</span></button>
+        <button class="cbtn" data-c="green"  onclick="selCol('green')"><span class="cn">Vert</span></button>
+        <button class="cbtn" data-c="blue"   onclick="selCol('blue')"><span class="cn">Bleu</span></button>
+        <button class="cbtn" data-c="red"    onclick="selCol('red')"><span class="cn">Rouge</span></button>
+      </div>
+    </div>
+
+    <!-- Niveau de difficulté IA -->
+    <div>
+      <div class="sec-label">Difficulté IA</div>
+      <div class="ailrow">
+        <button class="ailbtn sel" id="ailbtn-1" onclick="selAI(1)"><span class="aln">Basique</span><span class="ali">Débutant</span></button>
+        <button class="ailbtn"     id="ailbtn-2" onclick="selAI(2)"><span class="aln">Tactique</span><span class="ali">Avancé</span></button>
+        <button class="ailbtn"     id="ailbtn-3" onclick="selAI(3)"><span class="aln">Expert</span><span class="ali">Maître</span></button>
+      </div>
+    </div>
+
+    <!--
+      BOUTON JOUER → tryStartGame()
+      tryStartGame() vérifie le compteur avant d'appeler startGame().
+      Si plus de parties → popup freemium. Sinon → partie normale.
+    -->
+    <button class="btn-play" onclick="tryStartGame()">⚔️ JOUER</button>
+
+  </div>
+
+  <!-- Navigation bas de page -->
+  <div class="bottom-nav">
+    <button class="bnav bnav-sec" onclick="showModal('rules')">RÈGLES</button>
+    <button class="bnav bnav-tuto" onclick="openTuto()">TUTO</button>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════
+     GAME — Écran de jeu
+════════════════════════════════════ -->
+<div id="s-game" class="screen hidden">
+
+  <!-- Barre supérieure : retour, joueur actif, boutons mini -->
+  <div class="tban" id="tban">
+    <button class="btn-back-game" onclick="goMenu()">◀</button>
+    <div class="tban-center">
+      <div class="ttxt" id="ttxt">…</div>
+    </div>
+    <div class="topbar-btns">
+      <div class="tdot" id="tdot"></div>
+      <button class="btn-mini" onclick="showModal('rules')">📜</button>
+    </div>
+  </div>
+
+  <!-- Plateau de jeu -->
+  <div class="bwrap">
+    <div class="phase-msg" id="phase-msg"></div>
+    <div class="bframe" id="bframe"><div id="board"></div></div>
+  </div>
+
+  <!-- Barre d'info pièce sélectionnée -->
+  <div class="pi" id="pi">
+    <div class="pi-img-wrap"><img src="guepe.png" alt="Insecte" class="pi-insect-big"></div>
+    <div class="pi-info">
+      <div class="pin">Touchez une pièce</div>
+      <div class="pid">⚔️ <b>Tueurs</b> : Reine, Araignée, Mouche, Fourmis · 🔄 <b>Déplaceurs</b> : Coccinelle (vivant), Scarabée (dépouille 💀)</div>
+    </div>
+  </div>
+
+  <!-- Cartes des joueurs — masquées -->
+  <div class="pp" id="pp" style="display:none"></div>
+</div>
+
+<!-- ════════════════════════════════════
+     END — Écran de fin de partie
+════════════════════════════════════ -->
+<div id="s-end" class="screen hidden">
+  <div class="ecrown" id="ecrown">🏆</div>
+  <div class="etitle" id="etitle"></div>
+  <div class="esub"   id="esub"></div>
+  <div class="ewinner" id="ewinner"></div>
+  <div class="end-stats">
+    <div class="end-stat-row"><span>Tours joués</span><b id="end-turns">—</b></div>
+    <div class="end-stat-row"><span>Pièces capturées</span><b id="end-caps">—</b></div>
+  </div>
+  <!--
+    REJOUER → tryStartGame() (passe par le vérificateur freemium)
+  -->
+  <button class="btn-primary"   onclick="tryStartGame()">🔄 REJOUER</button>
+  <button class="btn-secondary" onclick="goMenu()">🏠 Retour au menu</button>
+</div>
+
+<!-- ════════════════════════════════════
+     MODAL — Règles du jeu
+════════════════════════════════════ -->
+<div class="modal-overlay hidden" id="modal-rules">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-title">📜 RÈGLES DU JEU</div>
+      <button class="modal-close" onclick="hideModal('rules')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="rule-section">
+        <div class="rule-stitle">Le Plateau</div>
+        <p class="rule-text">Grille <b>9×9</b>. Au centre se trouve le <b>Nid Sacré</b> 👑, une case spéciale — seule la Reine peut l'atteindre. Chaque colonie commence dans un coin du plateau avec <b>9 pièces vivantes</b>.</p>
+      </div>
+      <div class="rule-section">
+        <div class="rule-stitle">Les Pièces &amp; leurs déplacements</div>
+        <p class="rule-text">Toutes les pièces se déplacent <b>comme une Dame aux échecs</b> (orthogonal + diagonal, distance libre), <b>sauf les Fourmis Soldates</b>, limitées à <b>2 cases maximum</b>.</p>
+        <div class="rpiece"><span class="rpsym"><img src="reine_guepe_512.png" class="insect-icon" alt="Reine Guêpe"></span><div><b>Reine Guêpe — Pièce Maîtresse</b> — Tue une pièce adverse en se déplaçant sur sa case. La dépouille est posée sur <b>n'importe quelle case vide</b> choisie par le joueur. Sa mort entraîne <b>l'effondrement immédiat</b> de toute la colonie.</div></div>
+        <div class="rpiece"><span class="rpsym"><img src="araignee_512.png" class="insect-icon" alt="Araignée"></span><div><b>Araignée Assassine</b> — Tue une pièce en se déplaçant sur elle. La dépouille est automatiquement <b>renvoyée sur la case de départ</b> de l'Araignée.</div></div>
+        <div class="rpiece"><span class="rpsym"><img src="mouche_512.png" class="insect-icon" alt="Mouche"></span><div><b>Mouche Journaliste</b> — Se pose sur une case vide, puis toutes les <b>pièces ennemies adjacentes</b> (orthogonales ou diagonales) sont <b>tuées simultanément</b>.</div></div>
+        <div class="rpiece"><span class="rpsym"><img src="scarabee_512.png" class="insect-icon" alt="Scarabée"></span><div><b>Scarabée Déplaceur de Dépouilles</b> — Déplace une dépouille 💀 vers <b>n'importe quelle case libre</b>. ⚠️ VITAL : sans lui, la Reine peut être prise au piège des dépouilles !</div></div>
+        <div class="rpiece"><span class="rpsym"><img src="coccinelle_512.png" class="insect-icon" alt="Coccinelle"></span><div><b>Coccinelle Déplaceuse de Vivants</b> — Se pose sur une pièce ennemie vivante et la transporte vers <b>n'importe quelle case vide</b>. Elle <b>ne tue pas</b>, elle déplace uniquement.</div></div>
+        <div class="rpiece"><span class="rpsym"><img src="fourmi_512.png" class="insect-icon" alt="Fourmi"></span><div><b>Fourmis Soldates</b> — Portée max <b>2 cases</b>. Attaquent en se déplaçant sur leur cible. <b>Interdiction</b> : ne peuvent pas attaquer une Reine située sur le Nid Sacré.</div></div>
+      </div>
+      <div class="rule-section">
+        <div class="rule-stitle">Les Dépouilles 💀</div>
+        <p class="rule-text">Les pièces tuées laissent une dépouille sur le terrain. Elles deviennent des <b>obstacles permanents</b>, bloquent les déplacements en ligne droite, et servent à ériger les <b>murs d'encerclement</b>. Seul le <b>Scarabée</b> peut les déplacer.</p>
+      </div>
+      <div class="rule-section">
+        <div class="rule-stitle">Le Nid Sacré 👑</div>
+        <p class="rule-text">La Reine sur le Nid Sacré :<br>• <b>Mode 2 joueurs</b> : joue <b>deux actions par tour</b> tant qu'elle reste sur le Nid.<br>• <b>Mode 4 joueurs</b> : rejoue après chaque joueur (si &gt; 2 joueurs restants), puis 2 actions/tour quand il n'en reste que 2.<br>• Est <b>immunisée contre les Fourmis Soldates</b>.<br>• Peut <b>quitter le Nid</b> à tout moment.</p>
+      </div>
+      <div class="rule-section">
+        <div class="rule-stitle">Victoire</div>
+        <p class="rule-text"><b>Assassinat</b> → Tuer la Reine ennemie : sa colonie s'effondre et toutes ses pièces vivantes sont <b>converties à votre couleur</b>.<br><br><b>Encerclement</b> → La Reine ennemie est piégée par les dépouilles (total ou contre un bord) <b>et</b> sa colonie n'a plus de Scarabée vivant → Victoire ! S'il reste un Scarabée, elle n'est <b>pas</b> piégée.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════
+     MODAL FREEMIUM
+     Affiché quand le compteur atteint 0.
+     Deux options : partager 2 fois ou passer en premium.
+════════════════════════════════════ -->
+<div class="modal-overlay hidden" id="modal-freemium">
+  <div class="modal-box">
+
+    <!-- En-tête — pas de bouton fermer (popup bloquante) -->
+    <div class="modal-header">
+      <div class="modal-title">🔒 ACCÈS & DÉBLOCAGE</div>
+      <button class="modal-close" id="freemium-close" onclick="hideModal('freemium')">✕</button>
+    </div>
+
+    <div class="modal-body">
+
+      <!-- Icône + titre + sous-titre -->
+      <div class="freemium-icon"><img src="reine_guepe_512.png" class="insect-icon insect-icon--lg" alt="Reine Guêpe"></div>
+      <div class="freemium-title">Débloquez l'accès illimité</div>
+      <div class="freemium-sub">
+        Vos 20 parties gratuites sont écoulées.<br>
+        Choisissez une méthode pour continuer à jouer.
+      </div>
+
+      <!--
+        PROGRESSION DES PARTAGES
+        Deux pastilles qui se remplissent à chaque partage validé.
+        Mise à jour par updateShareDots() dans script.js.
+      -->
+      <div class="share-progress">
+        <div class="share-progress-label">Partages effectués</div>
+        <div class="share-progress-dots">
+          <div class="share-dot" id="share-dot-0"></div>
+          <div class="share-dot" id="share-dot-1"></div>
+        </div>
+      </div>
+
+      <!-- Boutons d'action -->
+      <div class="freemium-actions">
+
+        <!--
+          BOUTON PARTAGE
+          Utilise navigator.share() sur mobile, fallback clipboard sur desktop.
+          Appelle doShare() dans script.js.
+          Après 2 partages → accès freemium illimité sauvegardé dans localStorage.
+        -->
+        <button class="btn-share" id="btn-share" onclick="doShare()">
+          🤝 Partager à 2 amis
+          <span class="share-badge">2 partages requis</span>
+        </button>
+
+        <!-- Séparateur visuel -->
+        <div class="freemium-or">ou</div>
+
+        <!--
+          BOUTON PREMIUM
+          Redirige vers Stripe (STRIPE_URL dans script.js).
+          Au retour depuis Stripe avec ?premium=true → accès premium sauvegardé.
+        -->
+        <button class="btn-premium" onclick="goPremium()">
+          ⭐ Version Premium — 2,90 €
+        </button>
+
+      </div>
+
+      <!-- Mention légère -->
+      <div style="text-align:center;font-size:.65rem;color:var(--text-muted);margin-top:4px;">
+        Les partages et l'accès premium sont sauvegardés sur cet appareil.
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Script principal -->
+<script src="script.js"></script>
+
+<!-- ════════════════════════════════════
+     MODAL TUTORIEL ANIMÉ
+════════════════════════════════════ -->
+<!-- MODAL TUTORIEL -->
+<div class="modal-overlay hidden" id="modal-tuto" onclick="tutoBackdropClick(event)">
+  <div class="modal-box tuto-box" id="tuto-box">
+    <div class="modal-header tuto-header">
+      <div class="tuto-progress">
+        <span id="tuto-step-label">1 / 8</span>
+        <div class="tuto-dots" id="tuto-dots"></div>
+      </div>
+      <button class="modal-close" onclick="closeTuto()">✕</button>
+    </div>
+    <div class="tuto-track-wrap">
+      <div class="tuto-track" id="tuto-track"></div>
+    </div>
+    <div class="tuto-footer">
+      <button class="tuto-nav-btn" id="tuto-prev" onclick="tutoNav(-1)">◀</button>
+      <button class="tuto-cta" id="tuto-next" onclick="tutoNav(1)">Suivant →</button>
+    </div>
+  </div>
+</div>
+
+<script src="tuto.js"></script>
+</body>
+</html>
