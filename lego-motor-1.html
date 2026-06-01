@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BrickMorph v0.4</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@800&display=swap');
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#080808;color:#e8e8e8;font-family:'Space Mono',monospace;height:100vh;display:flex;flex-direction:column;overflow:hidden;}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(#131313 1px,transparent 1px),linear-gradient(90deg,#131313 1px,transparent 1px);background-size:40px 40px;opacity:.4;pointer-events:none;}
+header{position:relative;z-index:1;display:flex;align-items:center;justify-content:space-between;padding:10px 20px;border-bottom:1px solid #1e1e1e;background:#0c0c0c;flex-shrink:0;}
+.logo{font-family:'Syne',sans-serif;font-size:20px;font-weight:800;color:#f5a623;}.logo span{color:#4fc3f7;}
+.sub{font-size:9px;color:#444;letter-spacing:3px;}
+#cv{flex:1;position:relative;}
+#cv canvas{display:block;width:100%!important;height:100%!important;}
+.ui{position:absolute;top:10px;left:10px;display:flex;gap:5px;z-index:10;flex-wrap:wrap;}
+.btn{padding:5px 11px;font-size:9px;font-family:'Space Mono',monospace;background:rgba(12,12,12,.95);border:1px solid #222;color:#555;border-radius:3px;cursor:pointer;letter-spacing:1px;transition:all .2s;}
+.btn:hover{border-color:#4fc3f7;color:#4fc3f7;}
+.stats{position:absolute;top:10px;right:10px;background:rgba(8,8,8,.95);border:1px solid #1e1e1e;border-radius:4px;padding:10px 14px;font-size:9px;z-index:10;line-height:2.2;}
+.sl{color:#444;letter-spacing:1px;margin-right:10px;}.sv{color:#4fc3f7;font-weight:700;}
+.hint{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);font-size:9px;color:#333;letter-spacing:2px;background:rgba(8,8,8,.9);padding:5px 14px;border-radius:20px;border:1px solid #1a1a1a;white-space:nowrap;}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">Brick<span>Morph</span></div>
+  <div class="sub">v0.4 · PIGNON · PROPORTIONS FINES · DÉTAILS</div>
+</header>
+<div id="cv">
+  <div class="ui">
+    <button class="btn" id="bF">FAÇADE</button>
+    <button class="btn" id="bI">ISO</button>
+    <button class="btn" id="bT">DESSUS</button>
+    <button class="btn" id="bR">ARRIÈRE</button>
+  </div>
+  <div class="stats">
+    <span class="sl">BRIQUES</span><span class="sv" id="sB">—</span><br>
+    <span class="sl">COUCHES</span><span class="sv" id="sL">—</span><br>
+    <span class="sl">DIMS</span><span class="sv" id="sD">—</span>
+  </div>
+  <div class="hint">🖱 Glisser · Molette zoom · Tactile OK</div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ═══════════════════════════════════════════════════════════
+// PROPORTIONS — 1 brique = 50cm réel
+// Maison : 9m large × 7m prof × 3 niveaux
+// RdC : 3 couches (2.8m), Étage1 : 3 couches, Étage2 : 3 couches
+// Toit pignon : fronton triangulaire façade/arrière
+// ═══════════════════════════════════════════════════════════
+const BW = 36;   // largeur façade (9m) — 1 brique = 25cm
+const BD = 28;   // profondeur (7m)
+const LH = 0.75; // hauteur 1 couche (briques plus fines)
+
+// Étages : nb couches par niveau
+const FLOORS = [{h:5},{h:5},{h:5}]; // RdC, étage1, étage2 — plus de couches
+const TOTAL_WALL_LAYERS = FLOORS.reduce((a,f)=>a+f.h,0); // 9
+
+// Fenêtres : {x, w, wBricks, hLayers, atLayer, face}
+// 2 fenêtres par étage, 2 battants, encadrement pierre
+// Étage 1 : couches 3-4, Étage 2 : couches 6-7
+// Position x : ~3m depuis gauche = 6 briques, ~6m = 12 briques
+const WIN_DEFS = [
+  // Étage 1
+  {floor:1, x:6,  w:4, h:3, l:1}, // fenêtre gauche
+  {floor:1, x:24, w:4, h:3, l:1}, // fenêtre droite
+  // Étage 2
+  {floor:2, x:6,  w:4, h:3, l:1},
+  {floor:2, x:24, w:4, h:3, l:1},
+];
+
+// Porte-fenêtre double droite RdC (x=13, 3 briques, h=3 couches)
+const DOOR_BIG = {x:22, w:6, h:5};
+// Petite porte entrée centre-gauche (x=7, 1 brique, h=2)
+const DOOR_SMALL = {x:14, w:2, h:4};
+
+// Cheminée : position sur le toit, côté gauche
+const CHIM = {x:8, z:8, w:2, d:2, hExtra:2};
+
+// Couleurs
+const C = {
+  wall:   '#eae4d8', // enduit blanc cassé
+  wall2:  '#e0d8c8', // légère variation
+  roof:   '#3c4148', // ardoise foncée
+  trim:   '#c8a47a', // encadrement pierre beige-rosé
+  winFr:  '#8a6a40', // bois fenêtre brun
+  winGl:  '#b8d4ea', // vitrage bleu clair
+  chim:   '#787878', // brique cheminée
+  chimCp: '#505050', // chapeau
+  door:   '#c8b090', // bois porte
+  doorGl: '#b8d4ea', // vitrage porte
+  sill:   '#d4b888', // appui fenêtre
+  base:   '#c8c0b0', // soubassement
+  wood:   '#7a5230', // bac en bois
+  flower: '#e84060', // fleurs
+  green:  '#406820', // feuillage
+  dark:   '#222',
+};
+
+// ═══════════════════════════════════════════════════════════
+// THREE.JS SETUP
+// ═══════════════════════════════════════════════════════════
+const cv = document.getElementById('cv');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x070707);
+scene.fog = new THREE.FogExp2(0x070707, 0.0045);
+
+const cam = new THREE.PerspectiveCamera(38, cv.offsetWidth/cv.offsetHeight, 0.1, 800);
+const ren = new THREE.WebGLRenderer({antialias:true});
+ren.setPixelRatio(Math.min(devicePixelRatio,2));
+ren.setSize(cv.offsetWidth, cv.offsetHeight);
+ren.shadowMap.enabled = true;
+ren.shadowMap.type = THREE.PCFSoftShadowMap;
+cv.appendChild(ren.domElement);
+
+// Lumières
+scene.add(new THREE.AmbientLight(0xfff8f0, 0.55));
+const sun = new THREE.DirectionalLight(0xfff5e0, 1.0);
+sun.position.set(40, 80, 30);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048,2048);
+sun.shadow.camera.left=-80; sun.shadow.camera.right=80;
+sun.shadow.camera.top=80;   sun.shadow.camera.bottom=-80;
+sun.shadow.camera.far=300;
+scene.add(sun);
+const fill = new THREE.DirectionalLight(0x88b8d8, 0.3);
+fill.position.set(-40,20,-30); scene.add(fill);
+const sky = new THREE.DirectionalLight(0xc8d8e8, 0.2);
+sky.position.set(0,60,0); scene.add(sky);
+
+// Sol
+const floorM = new THREE.Mesh(
+  new THREE.PlaneGeometry(200,200),
+  new THREE.MeshLambertMaterial({color:0x0a0a0a})
+);
+floorM.rotation.x=-Math.PI/2; floorM.position.y=-0.02;
+floorM.receiveShadow=true; scene.add(floorM);
+scene.add(new THREE.GridHelper(160,80,0x161616,0x121212));
+
+// ═══════════════════════════════════════════════════════════
+// MATÉRIAUX
+// ═══════════════════════════════════════════════════════════
+const MC={};
+function mat(c,transp,opa){
+  const k=c+(transp?'t':'')+(opa||'');
+  if(!MC[k]) MC[k]=new THREE.MeshLambertMaterial({
+    color:new THREE.Color(c), transparent:!!transp, opacity:opa||1,
+    side: transp ? THREE.DoubleSide : THREE.FrontSide
+  });
+  return MC[k];
+}
+const eM = new THREE.LineBasicMaterial({color:0x000,opacity:0.14,transparent:true});
+const studG = new THREE.CylinderGeometry(0.19,0.19,0.12,8);
+
+// ═══════════════════════════════════════════════════════════
+// PRIMITIVES
+// ═══════════════════════════════════════════════════════════
+function brick(w,d,c,x,y,z){
+  const bw=w-0.09, bh=LH-0.07, bdp=d-0.09;
+  const g=new THREE.BoxGeometry(bw,bh,bdp);
+  const m=new THREE.Mesh(g,mat(c));
+  m.castShadow=true; m.receiveShadow=true;
+  m.add(new THREE.LineSegments(new THREE.EdgesGeometry(g),eM));
+  for(let sx=0;sx<w;sx++) for(let sz=0;sz<d;sz++){
+    const s=new THREE.Mesh(studG,mat(c));
+    s.position.set(-bw/2+.5+sx, bh/2+.06, -bdp/2+.5+sz);
+    m.add(s);
+  }
+  m.position.set(x+w/2, y+bh/2+0.035, z+d/2);
+  return m;
+}
+
+function box(w,h,d,c,x,y,z,transp,opa){
+  const g=new THREE.BoxGeometry(w,h,d);
+  const m=new THREE.Mesh(g,mat(c,transp,opa));
+  m.castShadow=!transp; m.receiveShadow=true;
+  m.position.set(x+w/2,y+h/2,z+d/2);
+  return m;
+}
+
+// Slope pignon : triangle extrudé, pente correcte
+// dir 'N' = face haute en arrière (+z), descend vers -z (façade)
+// dir 'S' = inverse
+function slopeGable(w,c,x,y,z,dir){
+  // Prisme triangulaire : base=1, hauteur=LH, profondeur=w
+  const H=LH, D=1.0-0.09, W=w-0.09;
+  const verts=[];
+  const norms=[];
+  function tri(a,b,cc){
+    const ax=b[0]-a[0],ay=b[1]-a[1],az=b[2]-a[2];
+    const bx=cc[0]-a[0],by=cc[1]-a[1],bz=cc[2]-a[2];
+    let nx=ay*bz-az*by,ny=az*bx-ax*bz,nz=ax*by-ay*bx;
+    const l=Math.sqrt(nx*nx+ny*ny+nz*nz)||1;
+    nx/=l;ny/=l;nz/=l;
+    [a,b,cc].forEach(p=>{verts.push(...p);norms.push(nx,ny,nz);});
+  }
+  // Points: bas-avant, bas-arrière, haut-arrière (pente descend vers avant)
+  // 4 vertices par face latérale
+  const BL=[0,0,0],BR=[W,0,0];
+  const AL=[0,0,D],AR=[W,0,D];
+  const TL=[0,H,D],TR=[W,H,D]; // haut côté arrière
+  // Base
+  tri(BL,AR,BR); tri(BL,AL,AR);
+  // Face arrière verticale (haute)
+  tri(AL,TL,AR); tri(AR,TL,TR);
+  // Face avant inclinée (la pente)
+  tri(BL,BR,TL); tri(BR,TR,TL);
+  // Faces latérales gauche/droite
+  tri(BL,TL,AL); // gauche
+  tri(BR,AR,TR); // droite
+  const geo=new THREE.BufferGeometry();
+  geo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(verts),3));
+  geo.setAttribute('normal',new THREE.BufferAttribute(new Float32Array(norms),3));
+  const m=new THREE.Mesh(geo,mat(c));
+  m.castShadow=true;
+  if(dir==='N'){
+    // déjà correct : face haute en +z, descend vers -z
+    m.position.set(x,y+0.035,z);
+  } else {
+    // 'S' : on miroire en Z
+    m.scale.z=-1;
+    m.position.set(x,y+0.035,z+D);
+  }
+  return m;
+}
+
+// ═══════════════════════════════════════════════════════════
+// FENÊTRE 2 BATTANTS avec encadrement
+// ═══════════════════════════════════════════════════════════
+function mkWindow(x,y,z,fw,fh){
+  const g=new THREE.Group();
+  const W=fw, H=fh*LH;
+  const th=0.18, dep=0.32;
+
+  // Encadrement pierre (saillie ~15cm)
+  const enc=new THREE.Mesh(new THREE.BoxGeometry(W+0.36,H+0.36,dep),mat(C.trim));
+  enc.position.set(W/2,H/2,-dep/2+0.02);
+  g.add(enc);
+  // Cadre bois intérieur
+  // Montants
+  [-th/2, W+th/2].forEach(ox=>{
+    const p=new THREE.Mesh(new THREE.BoxGeometry(th,H+0.04,dep-0.06),mat(C.winFr));
+    p.position.set(ox,H/2,0.04); g.add(p);
+  });
+  // Linteau + seuil bois
+  [H+th/2,-th/2+0.02].forEach(oy=>{
+    const p=new THREE.Mesh(new THREE.BoxGeometry(W,th,dep-0.06),mat(C.winFr));
+    p.position.set(W/2,oy,0.04); g.add(p);
+  });
+  // Montant central (2 battants)
+  const mid=new THREE.Mesh(new THREE.BoxGeometry(th,H,dep-0.1),mat(C.winFr));
+  mid.position.set(W/2,H/2,0.06); g.add(mid);
+  // Croisillons horizontaux (2 par battant)
+  [-0.2,0.2].forEach(oh=>{
+    const cr=new THREE.Mesh(new THREE.BoxGeometry(W,0.05,0.05),mat(C.winFr));
+    cr.position.set(W/2,H/2+oh*H*0.4,0.18); g.add(cr);
+  });
+  // Vitrages gauche et droit
+  [W*0.25,W*0.75].forEach(ox=>{
+    const gl=new THREE.Mesh(new THREE.BoxGeometry(W/2-th,H-th*2,0.06),mat(C.winGl,true,0.65));
+    gl.position.set(ox,H/2,0.16); g.add(gl);
+  });
+  // Appui de fenêtre saillant
+  const sill=new THREE.Mesh(new THREE.BoxGeometry(W+0.5,0.14,0.42),mat(C.sill));
+  sill.position.set(W/2,-0.07,-0.21); g.add(sill);
+
+  g.position.set(x,y,-0.16);
+  return g;
+}
+
+// ═══════════════════════════════════════════════════════════
+// PORTE double vitrée
+// ═══════════════════════════════════════════════════════════
+function mkDoorDouble(x,y,w,h){
+  const g=new THREE.Group();
+  const W=w,H=h*LH,th=0.16;
+  // Encadrement pierre
+  const enc=new THREE.Mesh(new THREE.BoxGeometry(W+0.4,H+0.2,0.28),mat(C.trim));
+  enc.position.set(W/2,H/2,-0.14); g.add(enc);
+  // Cadre bois
+  [[W/2,H+th/2,0.06,'h'],[W/2,-th/2+0.02,0.06,'h'],
+   [-th/2,H/2,0.06,'v'],[W+th/2,H/2,0.06,'v']].forEach(([px,py,pz,t])=>{
+    const dim=t==='h'?[W,th,0.2]:[th,H,0.2];
+    const p=new THREE.Mesh(new THREE.BoxGeometry(...dim),mat(C.door));
+    p.position.set(px,py,pz); g.add(p);
+  });
+  // Vitrage double
+  [W*0.27,W*0.73].forEach(ox=>{
+    const gl=new THREE.Mesh(new THREE.BoxGeometry(W/2-th*1.5,H-th*3,0.08),mat(C.doorGl,true,0.55));
+    gl.position.set(ox,H/2,0.12); g.add(gl);
+  });
+  // Séparateur central
+  const sep=new THREE.Mesh(new THREE.BoxGeometry(th,H,0.2),mat(C.door));
+  sep.position.set(W/2,H/2,0.06); g.add(sep);
+  g.position.set(x,y,-0.14);
+  return g;
+}
+
+// Petite porte
+function mkDoorSmall(x,y,w,h){
+  const g=new THREE.Group();
+  const W=w,H=h*LH;
+  const enc=new THREE.Mesh(new THREE.BoxGeometry(W+0.3,H+0.18,0.22),mat(C.trim));
+  enc.position.set(W/2,H/2,-0.11); g.add(enc);
+  const door=new THREE.Mesh(new THREE.BoxGeometry(W-0.1,H-0.12,0.14),mat(C.door));
+  door.position.set(W/2,H/2,0.07); g.add(door);
+  // Petite fenêtre haut de la porte
+  const gl=new THREE.Mesh(new THREE.BoxGeometry(W*0.5,H*0.25,0.06),mat(C.winGl,true,0.6));
+  gl.position.set(W/2,H*0.78,0.16); g.add(gl);
+  g.position.set(x,y,-0.11);
+  return g;
+}
+
+// ═══════════════════════════════════════════════════════════
+// CONSTRUCTION
+// ═══════════════════════════════════════════════════════════
+const grp=new THREE.Group();
+let nb=0;
+
+// Calculer y de base de chaque étage
+const floorY=[];
+let cy=0;
+FLOORS.forEach(f=>{floorY.push(cy);cy+=f.h*LH;});
+const wallTopY=cy;
+
+// Trous dans le mur (x, globalLayer)
+function isTrou(x,gl,face){
+  if(face!=='front') return false;
+  // Porte double droite : couches 0-2, x 13-15
+  if(gl<DOOR_BIG.h && x>=DOOR_BIG.x && x<DOOR_BIG.x+DOOR_BIG.w) return true;
+  // Petite porte centre : couches 0-1, x 7
+  if(gl<DOOR_SMALL.h && x>=DOOR_SMALL.x && x<DOOR_SMALL.x+DOOR_SMALL.w) return true;
+  // Fenêtres étages
+  for(const wd of WIN_DEFS){
+    const yBase=floorY[wd.floor];
+    const flH=FLOORS[wd.floor].h;
+    let gl0=0;
+    for(let i=0;i<wd.floor;i++) gl0+=FLOORS[i].h;
+    const wgl0=gl0+wd.l;
+    if(gl>=wgl0 && gl<wgl0+wd.h && x>=wd.x && x<wd.x+wd.w) return true;
+  }
+  return false;
+}
+
+// MURS
+FLOORS.forEach((fl,f)=>{
+  const yBase=floorY[f];
+  let gl0=0; for(let i=0;i<f;i++) gl0+=FLOORS[i].h;
+
+  for(let l=0;l<fl.h;l++){
+    const gl=gl0+l;
+    const y=yBase+l*LH;
+
+    // Quinconce : décalage d'une demi-brique selon parité de couche
+    const offset = gl % 2; // 0 ou 1
+
+    // Façade avant z=0
+    let x = offset === 1 ? 1 : 0;
+    // Brique isolée de départ si offset
+    if(offset===1 && !isTrou(0,gl,'front')){
+      grp.add(brick(1,1,C.wall,0,y,0)); nb++;
+    }
+    while(x<BW){
+      if(isTrou(x,gl,'front')){x++;continue;}
+      const c2=x+1<BW&&!isTrou(x+1,gl,'front');
+      const b=c2?brick(2,1,C.wall,x,y,0):brick(1,1,C.wall,x,y,0);
+      grp.add(b);nb++;x+=c2?2:1;
+    }
+    // Brique de fermeture fin de rangée si nécessaire
+    if(offset===1){
+      const xLast=BW-1;
+      if(!isTrou(xLast,gl,'front')){ grp.add(brick(1,1,C.wall,xLast,y,0)); nb++; }
+    }
+
+    // Façade arrière z=BD-1 avec quinconce
+    x = offset===1 ? 1 : 0;
+    if(offset===1){ grp.add(brick(1,1,C.wall2,0,y,BD-1)); nb++; }
+    while(x<BW){
+      const c2=x+1<BW;
+      grp.add(c2?brick(2,1,C.wall2,x,y,BD-1):brick(1,1,C.wall2,x,y,BD-1));
+      nb++;x+=c2?2:1;
+    }
+
+    // Côtés avec quinconce
+    let z = offset===1 ? 1 : 0;
+    if(offset===1){
+      grp.add(brick(1,1,C.wall,0,y,0));
+      grp.add(brick(1,1,C.wall,BW-1,y,0));
+    }
+    while(z<BD-1){
+      const c2=z+1<BD-1;
+      grp.add(c2?brick(1,2,C.wall,0,y,z):brick(1,1,C.wall,0,y,z));
+      grp.add(c2?brick(1,2,C.wall,BW-1,y,z):brick(1,1,C.wall,BW-1,y,z));
+      nb+=2;z+=c2?2:1;
+    }
+  }
+
+  // Liseré inter-étage
+  if(f>0){
+    const y=yBase-0.28;
+    for(let x=0;x<BW;x+=2){
+      const b=box(Math.min(2,BW-x),0.22,0.2,C.trim,x,y,-0.1);
+      grp.add(b);
+    }
+  }
+});
+
+// Soubassement rez-de-chaussée
+for(let x=0;x<BW;x++){
+  const b=box(1,0.32,0.22,C.base,x,-0.32,-0.11);
+  grp.add(b);
+}
+
+// Corniche haut des murs
+for(let x=0;x<BW;x+=0.5){
+  grp.add(box(0.52,0.22,0.36,C.trim,x,wallTopY,-0.18));
+  grp.add(box(0.52,0.22,0.36,C.trim,x,wallTopY,BD-0.18));
+}
+for(let z=0;z<BD;z+=0.5){
+  grp.add(box(0.36,0.22,0.52,C.trim,-0.18,wallTopY,z));
+  grp.add(box(0.36,0.22,0.52,C.trim,BW-0.18,wallTopY,z));
+}
+
+// FENÊTRES
+WIN_DEFS.forEach(wd=>{
+  let gl0=0;for(let i=0;i<wd.floor;i++) gl0+=FLOORS[i].h;
+  const y=floorY[wd.floor]+(wd.l)*LH - 0.08;
+  grp.add(mkWindow(wd.x, y, 0, wd.w, wd.h));
+});
+
+// PORTES
+grp.add(mkDoorDouble(DOOR_BIG.x, 0, DOOR_BIG.w, DOOR_BIG.h));
+grp.add(mkDoorSmall(DOOR_SMALL.x, 0, DOOR_SMALL.w, DOOR_SMALL.h));
+
+// ═══════════════════════════════════════════════════════════
+// TOIT PIGNON (gable) — fronton triangulaire façade + arrière
+// Pentes sur les côtés gauche et droit
+// ═══════════════════════════════════════════════════════════
+const ROOF_H = 8; // hauteur du toit en couches
+const roofBaseY = wallTopY;
+
+// TOIT PIGNON
+// Pignons façade + arrière : mur triangulaire
+for(let step=0;step<ROOF_H;step++){
+  const y=roofBaseY+step*LH;
+  const xStart=step;
+  const xEnd=BW-step;
+  if(xEnd<=xStart) break;
+  const off=step%2;
+  // Façade
+  let x=off?1:0;
+  if(off){grp.add(brick(1,1,C.wall,xStart,y,0));nb++;}
+  while(x+xStart<xEnd){
+    const rx=xStart+x;
+    const c2=rx+1<xEnd;
+    grp.add(c2?brick(2,1,C.wall,rx,y,0):brick(1,1,C.wall,rx,y,0));
+    nb++;x+=c2?2:1;
+  }
+  // Arrière
+  x=off?1:0;
+  if(off){grp.add(brick(1,1,C.wall,xStart,y,BD-1));nb++;}
+  while(x+xStart<xEnd){
+    const rx=xStart+x;
+    const c2=rx+1<xEnd;
+    grp.add(c2?brick(2,1,C.wall,rx,y,BD-1):brick(1,1,C.wall,rx,y,BD-1));
+    nb++;x+=c2?2:1;
+  }
+}
+
+// Pentes du toit : slopes sur tous les rangs z, pour chaque step
+for(let z=0;z<BD;z++){
+  for(let step=0;step<ROOF_H;step++){
+    const sy=roofBaseY+step*LH;
+    if(step<BW/2){
+      grp.add(slopeGable(1,C.roof,step,sy,z,'N'));
+      grp.add(slopeGable(1,C.roof,BW-1-step,sy,z,'S'));
+      nb+=2;
+    }
+  }
+}
+
+// Remplissage intérieur du toit (surface de la toiture)
+for(let step=0;step<ROOF_H;step++){
+  const y=roofBaseY+step*LH;
+  const xStart=step+1;
+  const xEnd=BW-step-1;
+  for(let z=1;z<BD-1;z+=2){
+    let x=xStart;
+    while(x<xEnd){
+      const c2=x+1<xEnd;
+      grp.add(c2?brick(2,Math.min(2,BD-1-z),C.roof,x,y,z):brick(1,1,C.roof,x,y,z));
+      nb++;x+=c2?2:1;
+    }
+    break; // une rangée suffit pour la surface
+  }
+}
+
+// Faîtage central
+const ridgeY=roofBaseY+ROOF_H*LH;
+let z2=0;
+while(z2<BD){
+  const c2=z2+2<BD;
+  grp.add(c2?brick(1,2,C.roof,BW/2-0.5,ridgeY,z2):brick(1,1,C.roof,BW/2-0.5,ridgeY,z2));
+  nb++;z2+=c2?2:1;
+}
+
+// ═══════════════════════════════════════════════════════════
+// CHEMINÉE — taille fixe, sort de 2 couches au-dessus du toit
+// ═══════════════════════════════════════════════════════════
+// La cheminée est à CHIM.x depuis la gauche du toit
+// Sa base part du sol, elle traverse les murs et le toit
+// On l'affiche seulement depuis la surface du toit
+const chimSurfaceY = roofBaseY + CHIM.x * LH; // hauteur du toit à cet endroit (pente)
+// Fût de cheminée : 3 couches visibles au-dessus du toit
+for(let ch=0;ch<3;ch++){
+  grp.add(brick(CHIM.w,CHIM.d,C.chim,CHIM.x,chimSurfaceY+ch*LH,CHIM.z));
+}
+// Chapeau (légèrement plus large)
+grp.add(box(CHIM.w+0.5,0.2,CHIM.d+0.5,C.chimCp,CHIM.x-0.25,chimSurfaceY+3*LH,CHIM.z-0.25));
+
+// ═══════════════════════════════════════════════════════════
+// BAC DE FLEURS (pièces LEGO standard simulées)
+// ═══════════════════════════════════════════════════════════
+// Bac en bois 4 briques de large, devant la façade
+const bacX=20, bacZ=-1.8;
+// Planches du bac
+grp.add(box(8,0.32,0.7,C.wood,bacX,0,bacZ));
+// Terre
+grp.add(box(3.8,0.22,0.5,'#3a5c1a',bacX+0.1,0.32,bacZ+0.1));
+// Fleurs (petites sphères colorées)
+[[bacX+0.5,0.72],[bacX+1.2,0.68],[bacX+2.0,0.75],[bacX+2.8,0.65],[bacX+3.4,0.72]].forEach(([fx,fy])=>{
+  // Tige
+  grp.add(box(0.06,0.28,0.06,C.green,fx-0.03,0.32,bacZ+0.3));
+  // Fleur
+  const flG=new THREE.Mesh(new THREE.SphereGeometry(0.14,8,6),mat(C.flower));
+  flG.position.set(fx,fy,bacZ+0.33);
+  grp.add(flG);
+  // Feuilles
+  const lG=new THREE.Mesh(new THREE.SphereGeometry(0.1,6,4),mat(C.green));
+  lG.position.set(fx+0.1,fy-0.1,bacZ+0.3);
+  grp.add(lG);
+});
+
+// ═══════════════════════════════════════════════════════════
+// CENTRAGE
+// ═══════════════════════════════════════════════════════════
+grp.position.set(-BW/2, 0, -BD/2);
+scene.add(grp);
+
+const totalLayers=TOTAL_WALL_LAYERS+ROOF_H+1;
+document.getElementById('sB').textContent=nb;
+document.getElementById('sL').textContent=totalLayers;
+document.getElementById('sD').textContent=BW+'×'+BD+'×'+totalLayers;
+
+// ═══════════════════════════════════════════════════════════
+// CAMÉRA ORBIT
+// ═══════════════════════════════════════════════════════════
+let theta=1.05,phi=0.68,rad=110,tx=0,ty=10,tz=0;
+function upCam(){
+  cam.position.set(tx+rad*Math.sin(phi)*Math.sin(theta),ty+rad*Math.cos(phi),tz+rad*Math.sin(phi)*Math.cos(theta));
+  cam.lookAt(tx,ty,tz);
+}
+upCam();
+
+let dn=false,lx,ly;
+const el=ren.domElement;
+el.addEventListener('mousedown',e=>{dn=true;lx=e.clientX;ly=e.clientY;});
+window.addEventListener('mouseup',()=>dn=false);
+window.addEventListener('mousemove',e=>{
+  if(!dn)return;
+  theta-=(e.clientX-lx)*.007;
+  phi=Math.max(.05,Math.min(1.52,phi+(e.clientY-ly)*.007));
+  lx=e.clientX;ly=e.clientY;upCam();
+});
+el.addEventListener('wheel',e=>{rad=Math.max(15,Math.min(150,rad+e.deltaY*.07));upCam();});
+
+let ltd=null,tdn=false,tlx,tly;
+el.addEventListener('touchstart',e=>{
+  if(e.touches.length===1){tdn=true;tlx=e.touches[0].clientX;tly=e.touches[0].clientY;}
+  if(e.touches.length===2)ltd=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+},{passive:true});
+el.addEventListener('touchend',()=>{tdn=false;ltd=null;});
+el.addEventListener('touchmove',e=>{
+  e.preventDefault();
+  if(e.touches.length===1&&tdn){
+    theta-=(e.touches[0].clientX-tlx)*.007;
+    phi=Math.max(.05,Math.min(1.52,phi+(e.touches[0].clientY-tly)*.007));
+    tlx=e.touches[0].clientX;tly=e.touches[0].clientY;upCam();
+  }
+  if(e.touches.length===2){
+    const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+    if(ltd){rad=Math.max(15,Math.min(150,rad-(d-ltd)*.12));upCam();}
+    ltd=d;
+  }
+},{passive:false});
+
+document.getElementById('bF').onclick=()=>{theta=0;phi=Math.PI/2;rad=100;ty=10;upCam();};
+document.getElementById('bI').onclick=()=>{theta=1.05;phi=.68;rad=110;ty=10;upCam();};
+document.getElementById('bT').onclick=()=>{theta=0;phi=.02;rad=130;upCam();};
+document.getElementById('bR').onclick=()=>{theta=Math.PI;phi=Math.PI/2;rad=100;upCam();};
+
+window.addEventListener('resize',()=>{
+  cam.aspect=cv.offsetWidth/cv.offsetHeight;
+  cam.updateProjectionMatrix();
+  ren.setSize(cv.offsetWidth,cv.offsetHeight);
+});
+
+(function loop(){requestAnimationFrame(loop);ren.render(scene,cam);})();
+</script>
+</body>
+</html>
