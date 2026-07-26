@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-WPT2KZEMBH"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-WPT2KZEMBH');
+</script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>IN-SECT — L'Échiquier des Colonies</title>
+
+  <!-- ── PWA ── -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#08080F">
+  <link rel="icon" type="image/webp" href="reine_guepe_512.webp">
+  <link rel="apple-touch-icon" href="reine_guepe_512.webp">
+
+  <!-- ── SEO & Open Graph (partage sur WhatsApp, Discord, Twitter…) ── -->
+  <meta name="description" content="4 colonies en guerre. 1 seule survivra. Jeu de stratégie d'encerclement unique — sans pub, sans abonnement.">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="IN-SECT — L'Échiquier des Colonies">
+  <meta property="og:description" content="4 colonies en guerre. 1 seule survivra. Reine Guêpe, Araignée Assassine, Mouche Journaliste… Jeu de stratégie unique.">
+  <meta property="og:image" content="images_insecte.webp">
+  <meta property="og:url" content="https://www.in-sect.org">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="IN-SECT — L'Échiquier des Colonies">
+  <meta name="twitter:description" content="4 colonies en guerre. 1 seule survivra.">
+  <meta name="twitter:image" content="images_insecte.webp">
+
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Exo+2:ital,wght@0,400;0,600;0,700;0,900;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="tuto.css">
+</head>
+<body>
+
+<!-- Couches canvas (fond animé + effets + victoire) -->
+<canvas id="c-ambient"></canvas>
+<canvas id="c-fx"></canvas>
+<canvas id="c-victory"></canvas>
+
+<!-- ════════════════════════════════════
+     SPLASH — Écran de chargement
+════════════════════════════════════ -->
+<div id="s-splash" class="screen">
+  <!-- Image de fond plein écran -->
+  <div class="splash-bg"></div>
+  <!-- Bouton entrer + tagline + barre de chargement en bas -->
+  <div class="splash-bottom">
+    <div class="splash-tagline" id="splash-tagline">4 colonies en guerre.<br>1 seule survivra.</div>
+    <button class="splash-enter-btn" id="splash-enter-btn" onclick="splashEnter()">
+      ENTRER DANS LA COLONIE
+    </button>
+    <div class="splash-hint">Gratuit · Sans pub · Sans abonnement</div>
+    <div class="splash-bar"><div class="splash-bar-fill" id="splash-bar-fill"></div></div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════
+     MENU — Sélection de la partie
+════════════════════════════════════ -->
+<div id="s-menu" class="screen hidden">
+
+  <!-- En-tête logo + son -->
+  <div class="menu-header">
+    <div>
+      <div class="menu-logo">IN-SECT</div>
+      <div class="menu-sub">L'Échiquier des Colonies</div>
+    </div>
+    <div class="menu-header-right">
+      <div class="menu-score-inline" id="menu-score-bar">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:1px;">
+          <span class="score-w" id="score-w-label">▲ 0</span>
+          <span style="font-size:0.75rem;color:rgba(48,208,96,.7);letter-spacing:.05em;">victoires</span>
+        </div>
+        <span class="score-sep">·</span>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:1px;">
+          <span class="score-l" id="score-l-label">▼ 0</span>
+          <span style="font-size:0.75rem;color:rgba(255,48,80,.7);letter-spacing:.05em;">défaites</span>
+        </div>
+        <button class="menu-score-reset" id="menu-score-reset" onclick="resetScore()">↺</button>
+      </div>
+      <button class="menu-sound" id="snd-btn" onclick="openSoundModal()">🔊</button>
+    </div>
+  </div>
+
+  <!--
+    BARRE DE STATUT FREEMIUM
+    Affiche en permanence : parties restantes, partages effectués, badge de statut.
+    Les IDs sont lus et mis à jour par updateStatusBar() dans script.js.
+  -->
+  <div class="menu-status-bar">
+    <div class="status-left">
+      <div class="status-counter" id="status-counter">♾️ Parties illimitées</div>
+      <div class="status-shares" id="status-shares" style="display:none"></div>
+    </div>
+    <div class="status-badge free" id="status-badge" onclick="doShare()" style="cursor:pointer">🆓 Gratuit</div>
+  </div>
+
+  <!-- Miniature animée du plateau selon le mode sélectionné -->
+  <div class="mode-preview" id="mode-preview"></div>
+
+  <!-- Zone de configuration -->
+  <div class="menu-config">
+
+    <!-- Choix du mode -->
+    <div class="mode-row">
+      <button class="mbtn sel" id="mbtn-1" onclick="selMode(1)">
+        <span class="mt">1 IA</span>
+      </button>
+      <button class="mbtn" id="mbtn-3" onclick="selMode(3)">
+        <span class="mt">3 IA</span>
+      </button>
+    </div>
+
+    <!-- Choix de la colonie — mode 1 IA -->
+    <div id="csel-1ia">
+      <div class="colony-row">
+        <button class="cbtn sel" data-c="yellow" onclick="selCol('yellow')"><span class="cn">Jaune</span></button>
+        <button class="cbtn"     data-c="red"    onclick="selCol('red')"><span class="cn">Rouge</span></button>
+        <button class="cbtn"     data-c="random" onclick="selCol('random')"><span class="cn">Aléat.</span></button>
+      </div>
+    </div>
+
+    <!-- Choix de la colonie — mode 3 IA -->
+    <div id="csel-3ia" style="display:none">
+      <div class="colony-row">
+        <button class="cbtn" data-c="yellow" onclick="selCol('yellow')"><span class="cn">Jaune</span></button>
+        <button class="cbtn" data-c="green"  onclick="selCol('green')"><span class="cn">Vert</span></button>
+        <button class="cbtn" data-c="blue"   onclick="selCol('blue')"><span class="cn">Bleu</span></button>
+        <button class="cbtn" data-c="red"    onclick="selCol('red')"><span class="cn">Rouge</span></button>
+      </div>
+    </div>
+
+    <!-- Niveau de difficulté -->
+    <div class="ailrow">
+      <button class="ailbtn sel" id="ailbtn-1" onclick="selAI(1)"><span class="aln">Basique</span></button>
+      <button class="ailbtn"     id="ailbtn-2" onclick="selAI(2)"><span class="aln">Tactique</span></button>
+      <button class="ailbtn"     id="ailbtn-3" onclick="selAI(3)"><span class="aln">Expert</span></button>
+    </div>
+
+    <button class="btn-play" onclick="tryStartGame()">⚔️ JOUER</button>
+
+  </div>
+
+  <!-- Navigation bas de page -->
+  <div class="bottom-nav">
+    <button class="bnav bnav-sec" onclick="showModal('rules')">RÈGLES</button>
+    <button class="bnav bnav-tuto" onclick="openTuto()">TUTO <span class="tuto-badge" id="tuto-badge">●</span></button>
+    <button class="bnav bnav-feedback" onclick="showModal('feedback')" title="Donner mon avis">💬</button>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════
+     GAME — Écran de jeu
+════════════════════════════════════ -->
+<div id="s-game" class="screen hidden">
+
+  <!-- TOPBAR : ◀ | IN-SECT titre fixe | 📜 🔊 -->
+  <div class="tban" id="tban">
+    <button class="btn-back-game" onclick="goMenu()">◀</button>
+    <div class="tban-center" id="tban-center">
+      <span style="font-family:'Cinzel Decorative',serif;font-size:clamp(.85rem,4vw,1.1rem);font-weight:900;color:#C0A0FF;letter-spacing:.12em;white-space:nowrap;">IN-SECT</span>
+    </div>
+    <div class="topbar-btns">
+      <div class="tdot" id="tdot"></div>
+      <button class="btn-mini" onclick="showModal('rules')">📜</button>
+      <button class="btn-mini" id="snd-btn-game" onclick="openSoundModal()">🔊</button>
+    </div>
+  </div>
+
+  <!-- ZONE INFO : bouton avec nom pièce/nid/SP + flèche ▾ -->
+  <div class="info-zone" id="info-zone">
+    <button class="btn-piece-explain" id="btn-piece-explain" onclick="openPieceExplainModal()" style="display:none;">
+      <span class="bpe-name" id="bpe-name"></span>
+      <span class="bpe-arrow">▾</span>
+    </button>
+    <div id="action-capsule"></div>
+  </div>
+
+  <!-- MODAL — Explication de la pièce / Nid / SP -->
+  <div class="modal-overlay hidden" id="modal-piece-explain">
+    <div class="modal-box" style="max-width:360px;">
+      <div class="modal-header">
+        <span id="piece-explain-title" style="font-family:'Cinzel Decorative',serif;font-size:1.1rem;font-weight:900;"></span>
+        <button class="modal-close" onclick="hideModal('piece-explain')">✕</button>
+      </div>
+      <div class="modal-body" id="piece-explain-body" style="font-size:1.05rem;line-height:1.7;color:rgba(224,220,255,.9);"></div>
+    </div>
+  </div>
+
+  <!-- ÉCHIQUIER -->
+  <div class="bwrap">
+    <div class="bframe" id="bframe"><div id="board"></div></div>
+    <div id="action-capsule"></div>
+  </div>
+
+  <!-- ZONE BAS : tour + SP + log des coups -->
+  <div class="bottom-zone" id="bottom-zone" style="display:none">
+
+    <!-- Tour actuel -->
+    <div class="turn-bar" id="turn-bar">
+      <span class="turn-dot" id="turn-dot"></span>
+      <span class="turn-txt" id="turn-txt">…</span>
+      <span class="mode-badge" id="mode-badge"></span>
+    </div>
+
+    <!-- Super pouvoirs -->
+    <div class="btog-row" onclick="handleSPToggleClick()">
+      <span class="btog-label">Super pouvoirs</span>
+      <div class="btog-check" id="btog-check-sp" onclick="toggleSPOption();event.stopPropagation()"></div>
+    </div>
+
+    <!-- Bouton derniers coups -->
+    <button class="btn-last-moves" id="btn-last-moves" onclick="openMoveLogModal()">📋 Derniers coups joués</button>
+
+    <!-- Copyright -->
+    <div class="game-copyright">© 2026 IN-SECT — L'Échiquier des Colonies</div>
+
+  </div>
+
+  <!-- Cartes des joueurs — masquées -->
+  <div class="pp" id="pp" style="display:none"></div>
+</div>
+
+<!-- ════════════════════════════════════
+     END — Écran de fin de partie
+════════════════════════════════════ -->
+<div id="s-end" class="screen hidden">
+  <div class="ecrown" id="ecrown">🏆</div>
+  <div class="etitle" id="etitle"></div>
+  <div class="esub"   id="esub"></div>
+  <div class="ewinner" id="ewinner"></div>
+  <div class="end-stats">
+    <div class="end-stat-row"><span>Tours joués</span><b id="end-turns">—</b></div>
+    <div class="end-stat-row"><span>Pièces capturées</span><b id="end-caps">—</b></div>
+  </div>
+  <!--
+    REJOUER → tryStartGame()
+  -->
+  <button class="btn-primary"   onclick="tryStartGame()">🔄 REJOUER</button>
+  <button class="btn-replay"    onclick="openReplayModal()">⏪ Revoir les derniers coups</button>
+  <button class="btn-secondary" onclick="goMenu()">🏠 Retour au menu</button>
+</div>
+
+<!-- ════════════════════════════════════
+     MODAL — Replay derniers coups
+════════════════════════════════════ -->
+<div class="modal-overlay hidden" id="modal-replay">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-title">📋 DERNIERS COUPS</div>
+      <button class="modal-close" onclick="hideModal('replay')">✕</button>
+    </div>
+    <div class="modal-body" id="replay-log-body" style="gap:6px;"></div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════
+     MODAL — Règles du jeu
+════════════════════════════════════ -->
+<div class="modal-overlay hidden" id="modal-rules">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-title">📜 RÈGLES DU JEU</div>
+      <button class="modal-close" onclick="hideModal('rules')">✕</button>
+    </div>
+    <div class="modal-body">
+      <!-- Bouton TUTO en haut des règles -->
+      <div style="text-align:center;margin-bottom:12px;">
+        <button onclick="hideModal('rules');openTuto();" style="padding:10px 28px;border-radius:12px;border:none;background:linear-gradient(160deg,#4020A0,#9050FF 40%,#3010A0);font-family:'Exo 2',sans-serif;font-size:1.05rem;font-weight:900;color:#F0E8FF;letter-spacing:.1em;cursor:pointer;box-shadow:0 4px 18px rgba(128,64,255,.35);">🎓 VOIR LE TUTORIEL</button>
+      </div>
+      <div class="rule-section">
+        <div class="rule-stitle">Le Plateau</div>
+        <p class="rule-text">Grille <b>9×9</b>. Au centre se trouve le <b>Nid Sacré</b> 👑, une case spéciale aux pouvoirs uniques. Chaque colonie commence dans un coin du plateau avec <b>9 pièces vivantes</b>.</p>
+      </div>
+      <div class="rule-section">
+        <div class="rule-stitle">Les Pièces &amp; leurs déplacements</div>
+        <p class="rule-text">Toutes les pièces se déplacent <b>comme une Dame aux échecs</b> (orthogonal + diagonal, distance libre), <b>sauf les Fourmis Soldates</b>, limitées à <b>2 cases maximum</b>.</p>
+        <div class="rpiece"><span class="rpsym"><img src="reine_guepe_512.webp" class="insect-icon" alt="Reine Guêpe"></span><div><b>Reine Guêpe — Pièce Maîtresse</b> — Tue une pièce adverse en se déplaçant sur sa case. La dépouille est posée sur <b>n'importe quelle case vide</b> choisie par le joueur. Sa mort entraîne <b>l'effondrement immédiat</b> de toute la colonie.</div></div>
+        <div class="rpiece"><span class="rpsym"><img src="araignee_512.webp" class="insect-icon" alt="Araignée"></span><div><b>Araignée Assassine</b> — Tue une pièce en se déplaçant sur elle, puis <b>retourne immédiatement à sa case de départ</b>. La dépouille reste sur la case de la cible.</div></div>
+        <div class="rpiece"><span class="rpsym"><img src="mouche_512.webp" class="insect-icon" alt="Mouche"></span><div><b>Mouche Journaliste</b> — Se pose sur une <b>case vide</b>, puis <b>choisit</b> d'attaquer soit les 4 cases orthogonales ↑↓←→, soit les 4 cases diagonales ↗↘↙↖. Toutes les pièces ennemies de la direction choisie sont <b>tuées simultanément</b>.</div></div>
+        <div class="rpiece"><span class="rpsym"><img src="scarabee_512.webp" class="insect-icon" alt="Scarabée"></span><div><b>Scarabée Déplaceur de Dépouilles</b> — Déplace une dépouille 💀 dans sa <b>ligne de vision directe</b> vers <b>n'importe quelle case libre</b>. ⚠️ VITAL : sans lui, la Reine peut être prise au piège des dépouilles !</div></div>
+        <div class="rpiece"><span class="rpsym"><img src="coccinelle_512.webp" class="insect-icon" alt="Coccinelle"></span><div><b>Coccinelle Déplaceuse de Vivants</b> — Se pose sur une pièce ennemie vivante et la transporte vers <b>n'importe quelle case vide</b>. Elle <b>ne tue pas</b>, elle déplace uniquement.</div></div>
+        <div class="rpiece"><span class="rpsym"><img src="fourmi_512.webp" class="insect-icon" alt="Fourmi"></span><div><b>Fourmis Soldates (×4)</b> — Portée max <b>2 cases</b>. Attaquent en se déplaçant sur leur cible. Quand elles tuent, <b>vous choisissez où repositionner la dépouille 💀</b>. <b>Interdiction</b> : ne peuvent pas attaquer une Reine située sur le Nid Sacré.</div></div>
+      </div>
+      <div class="rule-section">
+        <div class="rule-stitle">Les Dépouilles 💀</div>
+        <p class="rule-text">Les pièces tuées laissent une dépouille sur le terrain. Elles deviennent des <b>obstacles permanents</b>, bloquent les déplacements en ligne droite, et servent à ériger les <b>murs d'encerclement</b>. Seul le <b>Scarabée</b> peut les déplacer (et la Coccinelle avec son Super Pouvoir).</p>
+      </div>
+      <div class="rule-section">
+        <div class="rule-stitle">Le Nid Sacré 👑</div>
+        <p class="rule-text">
+          • <b>Seule la Reine</b> peut s'y arrêter librement. Toutes les autres pièces le <b>traversent</b> sans s'y arrêter.<br>
+          • <b>Tuer sur le Nid</b> — N'importe quelle pièce (sauf les Fourmis) peut aller tuer la Reine ennemie sur le Nid. Après ce kill, la pièce <b>doit immédiatement quitter le Nid</b> avec un <b>coup bonus</b> — ce coup permet par exemple d'y amener sa propre Reine.<br>
+          • <b>Immunité Fourmis</b> — Les Fourmis ne peuvent <b>jamais</b> attaquer une Reine posée sur le Nid.<br>
+          • <b>Mode Duel</b> — La Reine sur le Nid joue <b>2 actions par tour</b> tant qu'elle y reste.<br>
+          • <b>Mode Guerre totale</b> — La Reine sur le Nid <b>rejoue après chaque adversaire</b>. Quand il ne reste plus que 2 joueurs, elle passe en mode 2 actions par tour.<br>
+          • <b>Sortie libre</b> — La Reine peut quitter le Nid à tout moment, elle perd alors ses bonus immédiatement.
+        </p>
+      </div>
+      <div class="rule-section">
+        <div class="rule-stitle">Victoire</div>
+        <p class="rule-text"><b>Assassinat</b> → Tuer la Reine ennemie : sa colonie s'effondre et toutes ses pièces vivantes sont <b>converties à votre couleur</b>.<br><br><b>Encerclement</b> → Votre Reine est <b>piégée</b> si elle ne peut plus se déplacer nulle part (bloquée par des dépouilles et/ou les bords du plateau) <b>et</b> que votre colonie n'a plus de Scarabée vivant → vous êtes <b>éliminé</b>. Si votre Scarabée est encore en vie, la Reine n'est pas considérée piégée.</p>
+      </div>
+      <div class="rule-section">
+        <div class="rule-stitle">Les Super Pouvoirs ✨</div>
+        <p class="rule-text">Activables avant la partie (activés par défaut). Tous les 10 coups, une <b>spirale désigne une case</b> — la première pièce à s'y poser reçoit un super pouvoir unique :<br><br>
+          👑 <b>Reine — Invincibilité</b> : invincible pendant <b>4 de ses propres tours</b>.<br>
+          🐜 <b>Fourmi — Portée Reine</b> : se déplace comme une Dame aux échecs, portée illimitée.<br>
+          🐞 <b>Coccinelle — Résurrection</b> : ressuscite <b>n'importe quelle dépouille</b> du plateau — elle rejoint la colonie de la Coccinelle.<br>
+          🪲 <b>Scarabée — Déplacement libre</b> : déplace <b>n'importe quelle dépouille</b> du plateau sans restriction de ligne de vision.<br>
+          🪰 <b>Mouche — Zone totale</b> : attaque dans les <b>8 directions simultanément</b>.<br>
+          🕷️ <b>Araignée — Double Kill</b> : tue également la pièce <b>directement derrière</b> dans la même ligne. Les deux dépouilles reviennent à la case de départ de l'Araignée.
+        </p>
+      </div>
+      <div class="rule-copyright">© 2026 IN-SECT — L'Échiquier des Colonies. Tous droits réservés.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════
+     MODAL SON — Musique & Bruitages
+════════════════════════════════════ -->
+<div class="modal-overlay hidden" id="modal-sound">
+  <div class="modal-box modal-box--small">
+    <div class="modal-header">
+      <div class="modal-title">🔊 SON</div>
+      <button class="modal-close" onclick="hideModal('sound')">✕</button>
+    </div>
+    <div class="modal-body sound-modal-body">
+      <label class="sound-toggle-row" onclick="toggleMusic()">
+        <div class="sound-toggle-info">
+          <span class="sound-toggle-icon">🎵</span>
+          <span class="sound-toggle-label">Musique</span>
+        </div>
+        <div class="sound-toggle-track" id="sound-track-music">
+          <div class="sound-toggle-thumb"></div>
+        </div>
+      </label>
+      <label class="sound-toggle-row" onclick="toggleSFX()">
+        <div class="sound-toggle-info">
+          <span class="sound-toggle-icon">💥</span>
+          <span class="sound-toggle-label">Bruitages</span>
+        </div>
+        <div class="sound-toggle-track" id="sound-track-sfx">
+          <div class="sound-toggle-thumb"></div>
+        </div>
+      </label>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════
+     MODAL — Derniers coups joués
+════════════════════════════════════ -->
+<div class="modal-overlay hidden" id="modal-movelog">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-title">📋 DERNIERS COUPS JOUÉS</div>
+      <button class="modal-close" onclick="hideModal('movelog')">✕</button>
+    </div>
+    <div class="modal-body" id="movelog-body" style="gap:6px;"></div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════
+     MODAL FEEDBACK
+════════════════════════════════════ -->
+<div class="modal-overlay hidden" id="modal-feedback">
+  <div class="modal-box" style="max-width:420px;">
+    <div class="modal-header">
+      <div class="modal-title">💬 DONNER MON AVIS</div>
+      <button class="modal-close" onclick="hideModal('feedback')">✕</button>
+    </div>
+    <div class="modal-body" style="gap:14px;">
+      <p style="font-size:.95rem;line-height:1.65;color:rgba(224,220,255,.8);">
+        IN-SECT est fait par <strong style="color:#C0A0FF;">une seule personne</strong>.<br>
+        Ton retour compte vraiment pour la suite du jeu.
+      </p>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <label style="font-size:.8rem;color:rgba(255,255,255,.45);letter-spacing:.08em;">TA PIÈCE FAVORITE</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="feedback-piece-btn" onclick="selectFeedbackPiece(this,'Reine Guêpe')">👑 Reine</button>
+          <button class="feedback-piece-btn" onclick="selectFeedbackPiece(this,'Araignée')">🕷️ Araignée</button>
+          <button class="feedback-piece-btn" onclick="selectFeedbackPiece(this,'Mouche')">🪰 Mouche</button>
+          <button class="feedback-piece-btn" onclick="selectFeedbackPiece(this,'Scarabée')">🪲 Scarabée</button>
+          <button class="feedback-piece-btn" onclick="selectFeedbackPiece(this,'Coccinelle')">🐞 Coccinelle</button>
+          <button class="feedback-piece-btn" onclick="selectFeedbackPiece(this,'Fourmi')">🐜 Fourmi</button>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <label style="font-size:.8rem;color:rgba(255,255,255,.45);letter-spacing:.08em;">TON MESSAGE (optionnel)</label>
+        <textarea id="feedback-text"
+          placeholder="Une idée, un bug, ce que tu aimes ou pas… tout est utile !"
+          style="background:rgba(255,255,255,.04);border:1px solid rgba(128,80,255,.35);border-radius:10px;color:rgba(224,220,255,.9);font-family:'Exo 2',sans-serif;font-size:.92rem;padding:10px 12px;resize:vertical;min-height:90px;outline:none;width:100%;box-sizing:border-box;"></textarea>
+      </div>
+      <button class="btn-feedback-send" onclick="sendFeedback()">✉️ Envoyer à Ludovic</button>
+      <p style="font-size:.68rem;color:rgba(255,255,255,.22);text-align:center;margin-top:-6px;">Ouvre ton application mail avec le message pré-rempli.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════
+     MODAL CGV
+════════════════════════════════════ -->
+<div class="modal-overlay hidden" id="modal-cgv">
+  <div class="modal-box" style="max-width:480px;">
+    <div class="modal-header">
+      <div class="modal-title">📄 CONDITIONS GÉNÉRALES DE VENTE</div>
+      <button class="modal-close" onclick="hideModal('cgv')">✕</button>
+    </div>
+    <div class="modal-body" style="font-size:.9rem;line-height:1.75;color:rgba(224,220,255,.82);gap:0;overflow-y:auto;max-height:60vh;">
+      <p style="font-size:.75rem;color:rgba(255,255,255,.3);margin-bottom:14px;">En vigueur au 1er janvier 2026</p>
+      <h3 class="cgv-h">1. Vendeur</h3>
+      <p>Dulac Ludovic, auto-entrepreneur<br>50 rue Poullic al Lor, 29200 Brest, France<br>
+      Contact : <a href="mailto:ludovicdulac@yahoo.com" style="color:#A080EE;">ludovicdulac@yahoo.com</a></p>
+      <h3 class="cgv-h">2. Service vendu</h3>
+      <p>IN-SECT — L'Échiquier des Colonies est un jeu accessible gratuitement, sans pub ni abonnement.</p>
+      <h3 class="cgv-h">3. Données personnelles</h3>
+      <p>Aucune donnée personnelle n'est collectée. La progression est enregistrée localement dans le navigateur de l'utilisateur.</p>
+      <h3 class="cgv-h">4. Disponibilité</h3>
+      <p>Le jeu est fourni en l'état, accessible via navigateur web. Le vendeur s'efforce de maintenir le service disponible.</p>
+      <h3 class="cgv-h">5. Contact &amp; litiges</h3>
+      <p>Pour toute question : <a href="mailto:ludovicdulac@yahoo.com" style="color:#A080EE;">ludovicdulac@yahoo.com</a>. Droit applicable : droit français.</p>
+    </div>
+  </div>
+</div>
+
+<script src="js/01-core.js"></script>
+<script src="js/02-audio-fx.js"></script>
+<script src="js/03-nav-menu.js"></script>
+<script src="js/04-board.js"></script>
+<script src="js/05-rules.js"></script>
+<script src="js/06-ai.js"></script>
+<script src="js/07-powers.js"></script>
+<script src="js/08-boot.js"></script>
+
+<!-- ════════════════════════════════════
+     MODAL TUTORIEL ANIMÉ
+════════════════════════════════════ -->
+<!-- MODAL TUTORIEL -->
+<div class="modal-overlay hidden" id="modal-tuto" onclick="tutoBackdropClick(event)">
+  <div class="modal-box tuto-box" id="tuto-box">
+    <div class="modal-header tuto-header">
+      <div class="tuto-progress">
+        <span id="tuto-step-label">1 / 8</span>
+        <div class="tuto-dots" id="tuto-dots"></div>
+      </div>
+      <button class="modal-close" onclick="closeTuto()">✕</button>
+    </div>
+    <div class="tuto-track-wrap">
+      <div class="tuto-track" id="tuto-track"></div>
+    </div>
+    <div class="tuto-footer">
+      <button class="tuto-nav-btn" id="tuto-prev" onclick="tutoNav(-1)">◀</button>
+      <button class="tuto-cta" id="tuto-next" onclick="tutoNav(1)">Suivant →</button>
+    </div>
+  </div>
+</div>
+
+<script src="tuto.js"></script>
+</body>
+</html>
