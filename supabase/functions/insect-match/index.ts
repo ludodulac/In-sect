@@ -48,6 +48,22 @@ function publicRules(match: any) {
     sp_random: match.host_sp_vote !== null && match.guest_sp_vote !== null && match.host_sp_vote !== match.guest_sp_vote,
   }
 }
+async function createRoom(hostSecret: string, guestSecret?: string) {
+  const hostHash = await sha256(hostSecret)
+  const guestHash = guestSecret ? await sha256(guestSecret) : null
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const code = randomCode()
+    const { data, error } = await db.from('insect_matches').insert({
+      code,
+      host_secret_hash: hostHash,
+      guest_secret_hash: guestHash,
+      status: guestSecret ? 'active' : 'waiting',
+    }).select('code,status,version').single()
+    if (!error) return data
+    if (error.code !== '23505') throw error
+  }
+  throw new Error('room_code_generation_failed')
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
@@ -57,16 +73,91 @@ Deno.serve(async (req) => {
     const action = String(body?.action || '')
 
     if (action === 'create') {
-      const secret = randomSecret(), secretHash = await sha256(secret)
-      let created: any = null
-      for (let attempt = 0; attempt < 6; attempt++) {
-        const code = randomCode()
-        const { data, error } = await db.from('insect_matches').insert({ code, host_secret_hash: secretHash, status: 'waiting' }).select('code,status,version').single()
-        if (!error) { created = data; break }
-        if (error.code !== '23505') throw error
-      }
-      if (!created) return json({ ok: false, error: 'Impossible de générer un code.' }, 503)
+      const secret = randomSecret()
+      const created = await createRoom(secret)
       return json({ ok: true, code: created.code, secret, status: created.status, version: Number(created.version) })
+    }
+
+    if (action === 'matchmake_start') {
+      const queueSecret = randomSecret()
+      const queueHash = await sha256(queueSecret)
+      const now = new Date().toISOString()
+      await db.from('insect_matchmaking_queue').delete().lt('expires_at', now)
+
+      const { data: waiting, error: waitError } = await db.from('insect_matchmaking_queue')
+        .select('*')
+        .is('matched_code', null)
+        .eq('consumed', false)
+        .gt('expires_at', now)
+        .order('requested_at', { ascending: true })
+        .limit(1)
+        .maybeSingle()
+      if (waitError) throw waitError
+
+      if (!waiting) {
+        const { error } = await db.from('insect_matchmaking_queue').insert({
+          player_secret_hash: queueHash,
+          queue_secret_hash: queueHash,
+          requested_at: now,
+          expires_at: new Date(Date.now() + 120000).toISOString(),
+        })
+        if (error) throw error
+        return json({ ok: true, matched: false, queue_secret: queueSecret })
+      }
+
+      const waitingQueueHash = waiting.queue_secret_hash || waiting.player_secret_hash
+      const hostSecret = randomSecret()
+      const guestSecret = randomSecret()
+      const room = await createRoom(hostSecret, guestSecret)
+
+      const { data: claimed, error: claimError } = await db.from('insect_matchmaking_queue')
+        .update({ matched_code: room.code, matched_role: 'host', match_secret: hostSecret })
+        .eq('id', waiting.id)
+        .is('matched_code', null)
+        .select('id')
+        .maybeSingle()
+      if (claimError) throw claimError
+      if (!claimed) {
+        await db.from('insect_matches').delete().eq('code', room.code)
+        return json({ ok: false, error: 'Conflit de matchmaking, réessayez.' }, 409)
+      }
+
+      const { error: insertError } = await db.from('insect_matchmaking_queue').insert({
+        player_secret_hash: queueHash,
+        queue_secret_hash: queueHash,
+        requested_at: now,
+        matched_code: room.code,
+        matched_role: 'guest',
+        match_secret: guestSecret,
+        consumed: true,
+        expires_at: new Date(Date.now() + 120000).toISOString(),
+      })
+      if (insertError) throw insertError
+
+      return json({ ok: true, matched: true, queue_secret: queueSecret, code: room.code, secret: guestSecret, role: 'guest', status: 'active' })
+    }
+
+    if (action === 'matchmake_status' || action === 'matchmake_cancel') {
+      const queueSecret = String(body?.queue_secret || '')
+      if (!queueSecret) return json({ ok: false, error: 'Session de recherche manquante.' }, 401)
+      const qh = await sha256(queueSecret)
+      const { data: q, error } = await db.from('insect_matchmaking_queue').select('*').eq('queue_secret_hash', qh).maybeSingle()
+      if (error) throw error
+      if (!q) return json({ ok: false, error: 'Recherche introuvable ou expirée.' }, 404)
+
+      if (action === 'matchmake_cancel') {
+        if (!q.matched_code) await db.from('insect_matchmaking_queue').delete().eq('id', q.id)
+        return json({ ok: true, cancelled: !q.matched_code, matched: !!q.matched_code })
+      }
+
+      if (new Date(q.expires_at).getTime() < Date.now() && !q.matched_code) {
+        await db.from('insect_matchmaking_queue').delete().eq('id', q.id)
+        return json({ ok: true, matched: false, expired: true })
+      }
+      if (!q.matched_code) return json({ ok: true, matched: false })
+
+      await db.from('insect_matchmaking_queue').update({ consumed: true }).eq('id', q.id)
+      return json({ ok: true, matched: true, code: q.matched_code, secret: q.match_secret, role: q.matched_role, status: 'active' })
     }
 
     const code = String(body?.code || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6)
