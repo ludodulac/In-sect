@@ -53,12 +53,7 @@ async function createRoom(hostSecret: string, guestSecret?: string) {
   const guestHash = guestSecret ? await sha256(guestSecret) : null
   for (let attempt = 0; attempt < 8; attempt++) {
     const code = randomCode()
-    const { data, error } = await db.from('insect_matches').insert({
-      code,
-      host_secret_hash: hostHash,
-      guest_secret_hash: guestHash,
-      status: guestSecret ? 'active' : 'waiting',
-    }).select('code,status,version').single()
+    const { data, error } = await db.from('insect_matches').insert({ code, host_secret_hash: hostHash, guest_secret_hash: guestHash, status: guestSecret ? 'active' : 'waiting' }).select('code,status,version').single()
     if (!error) return data
     if (error.code !== '23505') throw error
   }
@@ -81,41 +76,34 @@ Deno.serve(async (req) => {
     if (action === 'matchmake_start') {
       const queueSecret = randomSecret()
       const queueHash = await sha256(queueSecret)
-      const now = new Date().toISOString()
-      await db.from('insect_matchmaking_queue').delete().lt('expires_at', now)
+      const now = new Date()
+      const nowIso = now.toISOString()
+      const freshCutoff = new Date(now.getTime() - 5000).toISOString()
+      await db.from('insect_matchmaking_queue').delete().lt('expires_at', nowIso)
 
       const { data: waiting, error: waitError } = await db.from('insect_matchmaking_queue')
-        .select('*')
-        .is('matched_code', null)
-        .eq('consumed', false)
-        .gt('expires_at', now)
-        .order('requested_at', { ascending: true })
-        .limit(1)
-        .maybeSingle()
+        .select('*').is('matched_code', null).eq('consumed', false).gt('expires_at', nowIso).gt('last_seen_at', freshCutoff)
+        .order('requested_at', { ascending: true }).limit(1).maybeSingle()
       if (waitError) throw waitError
 
       if (!waiting) {
         const { error } = await db.from('insect_matchmaking_queue').insert({
           player_secret_hash: queueHash,
           queue_secret_hash: queueHash,
-          requested_at: now,
-          expires_at: new Date(Date.now() + 120000).toISOString(),
+          requested_at: nowIso,
+          last_seen_at: nowIso,
+          expires_at: new Date(now.getTime() + 120000).toISOString(),
         })
         if (error) throw error
         return json({ ok: true, matched: false, queue_secret: queueSecret })
       }
 
-      const waitingQueueHash = waiting.queue_secret_hash || waiting.player_secret_hash
       const hostSecret = randomSecret()
       const guestSecret = randomSecret()
       const room = await createRoom(hostSecret, guestSecret)
-
       const { data: claimed, error: claimError } = await db.from('insect_matchmaking_queue')
         .update({ matched_code: room.code, matched_role: 'host', match_secret: hostSecret })
-        .eq('id', waiting.id)
-        .is('matched_code', null)
-        .select('id')
-        .maybeSingle()
+        .eq('id', waiting.id).is('matched_code', null).gt('last_seen_at', freshCutoff).select('id').maybeSingle()
       if (claimError) throw claimError
       if (!claimed) {
         await db.from('insect_matches').delete().eq('code', room.code)
@@ -125,15 +113,15 @@ Deno.serve(async (req) => {
       const { error: insertError } = await db.from('insect_matchmaking_queue').insert({
         player_secret_hash: queueHash,
         queue_secret_hash: queueHash,
-        requested_at: now,
+        requested_at: nowIso,
+        last_seen_at: nowIso,
         matched_code: room.code,
         matched_role: 'guest',
         match_secret: guestSecret,
         consumed: true,
-        expires_at: new Date(Date.now() + 120000).toISOString(),
+        expires_at: new Date(now.getTime() + 120000).toISOString(),
       })
       if (insertError) throw insertError
-
       return json({ ok: true, matched: true, queue_secret: queueSecret, code: room.code, secret: guestSecret, role: 'guest', status: 'active' })
     }
 
@@ -154,9 +142,12 @@ Deno.serve(async (req) => {
         await db.from('insect_matchmaking_queue').delete().eq('id', q.id)
         return json({ ok: true, matched: false, expired: true })
       }
-      if (!q.matched_code) return json({ ok: true, matched: false })
+      if (!q.matched_code) {
+        await db.from('insect_matchmaking_queue').update({ last_seen_at: new Date().toISOString() }).eq('id', q.id)
+        return json({ ok: true, matched: false })
+      }
 
-      await db.from('insect_matchmaking_queue').update({ consumed: true }).eq('id', q.id)
+      await db.from('insect_matchmaking_queue').update({ consumed: true, last_seen_at: new Date().toISOString() }).eq('id', q.id)
       return json({ ok: true, matched: true, code: q.matched_code, secret: q.match_secret, role: q.matched_role, status: 'active' })
     }
 
