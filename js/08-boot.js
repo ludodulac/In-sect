@@ -85,6 +85,12 @@ function loadMultiplayerClient() {
     const mp = document.createElement('script');
     mp.id = 'insect-mp-client';
     mp.src = 'js/09-multiplayer.js';
+    mp.onload = () => {
+      const resume = document.createElement('script');
+      resume.id = 'insect-mp-resume';
+      resume.src = 'js/10-multiplayer-resume.js';
+      document.body.appendChild(resume);
+    };
     document.body.appendChild(mp);
   };
   document.body.appendChild(cfg);
