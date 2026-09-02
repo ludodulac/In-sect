@@ -6,7 +6,7 @@ const projectUrl=String(window.INSECT_SUPABASE_URL||'').trim();
 const publishableKey=String(window.INSECT_SUPABASE_PUBLISHABLE_KEY||'').trim();
 if(!MP||!/^https:\/\//i.test(projectUrl)||!publishableKey)return;
 
-const SDK_URL='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.95.0/dist/umd/supabase.min.js';
+const SDK_URL='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.95.3';
 let client=null;
 let channel=null;
 let channelTopic=null;
