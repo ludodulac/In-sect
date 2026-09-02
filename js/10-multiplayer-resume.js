@@ -8,6 +8,7 @@ const MP=window.INSECT_MP;
 if(!MP||!/^https:\/\//i.test(String(MP.api||'')))return;
 MP.awaitingServer=false;
 MP.awaitingVersion=null;
+MP.realtimeTopic=MP.realtimeTopic||null;
 
 function status(message,error=false){
   const el=document.getElementById('mp-status');
@@ -77,7 +78,8 @@ async function reconcile(forceRestore=false){
   reconciling=true;if(forceRestore)status('Reconnexion à la partie…');
   try{
     const o=await apiGet(Number.isFinite(MP.lastVersion)?MP.lastVersion:-1);
-    if(o.status==='finished'){MP.active=false;MP.awaitingServer=false;MP.awaitingVersion=null;clear();stopResumePoll();status('Partie terminée.');return false}
+    if(o.realtime_topic)MP.realtimeTopic=String(o.realtime_topic);
+    if(o.status==='finished'){MP.active=false;MP.awaitingServer=false;MP.awaitingVersion=null;MP.realtimeTopic=null;clear();stopResumePoll();status('Partie terminée.');return false}
     if(o.sp_decided)MP.spEnabled=!!o.sp_enabled;
     if(o.state&&Number(o.version)>Number(MP.lastVersion)){
       MP.lastVersion=Number(o.version);MP.active=true;applyState(o.state);save();
@@ -111,7 +113,7 @@ if(typeof isHuman==='function'&&!isHuman.__mpAuthoritativeLocked){
 }
 
 const originalLeave=typeof MP.leave==='function'?MP.leave:null;
-if(originalLeave)MP.leave=function(){clear();stopResumePoll();MP.awaitingServer=false;MP.awaitingVersion=null;return originalLeave.apply(this,arguments)};
+if(originalLeave)MP.leave=function(){clear();stopResumePoll();MP.awaitingServer=false;MP.awaitingVersion=null;MP.realtimeTopic=null;return originalLeave.apply(this,arguments)};
 for(const name of ['create','join']){
   const original=typeof MP[name]==='function'?MP[name]:null;
   if(original)MP[name]=async function(){const r=await original.apply(this,arguments);setTimeout(save,0);return r};
@@ -121,5 +123,5 @@ document.addEventListener('visibilitychange',()=>{if(document.visibilityState===
 window.addEventListener('pagehide',save);window.addEventListener('beforeunload',save);setInterval(save,1000);
 const saved=load();
 if(saved&&!MP.code){MP.code=saved.code;MP.secret=saved.secret;MP.role=saved.role;MP.localColor=saved.localColor;MP.lastVersion=-1;MP.lastPushedTurn=null;reconcile(true)}
-MP.resumeSession=()=>reconcile(true);MP.clearSavedSession=clear;
+MP.resumeSession=()=>reconcile(true);MP.syncNow=()=>reconcile(false);MP.clearSavedSession=clear;
 })();
