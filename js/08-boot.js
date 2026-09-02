@@ -16,6 +16,18 @@ function initBGM() {
 function playBGM() { if (_bgm && !_muted && _bgm.paused) _bgm.play().catch(()=>{}); }
 function stopBGM() { if (_bgm && !_bgm.paused) _bgm.pause(); }
 
+function preloadPieceSprites() {
+  try {
+    if (typeof SYM === 'undefined') return;
+    const sources = [...new Set(Object.values(SYM).filter(Boolean))];
+    for (const src of sources) {
+      const img = new Image();
+      img.decoding = 'async';
+      img.src = src;
+    }
+  } catch (_) {}
+}
+
 function gaTrack(eventName, params = {}) {
   try {
     if (typeof window.gtag !== 'function') return;
@@ -93,6 +105,12 @@ function loadMultiplayerClient() {
         const ready = document.createElement('script');
         ready.id = 'insect-mp-ready';
         ready.src = 'js/11-multiplayer-ready.js';
+        ready.onload = () => {
+          const realtime = document.createElement('script');
+          realtime.id = 'insect-mp-realtime';
+          realtime.src = 'js/12-multiplayer-realtime.js';
+          document.body.appendChild(realtime);
+        };
         document.body.appendChild(ready);
       };
       document.body.appendChild(resume);
@@ -106,6 +124,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initAmbientParticles();
   FX.init();
   initBGM();
+  preloadPieceSprites();
   installAnalyticsHooks();
   loadMultiplayerClient();
   gaTrack('app_loaded', { standalone: window.matchMedia && window.matchMedia('(display-mode: standalone)').matches, language: navigator.language || undefined });
