@@ -41,8 +41,9 @@ async function fetchTopic(){
 }
 
 async function disconnect(){
-  if(channel&&client){try{await client.removeChannel(channel)}catch(_){}}
-  channel=null;channelTopic=null;
+  const old=channel;
+  channel=null;channelTopic=null;MP.realtimeConnected=false;
+  if(old&&client){try{await client.removeChannel(old)}catch(_){}}
 }
 
 async function connect(topic){
@@ -52,19 +53,21 @@ async function connect(topic){
     const sdk=await loadSdk();
     if(!client)client=sdk.createClient(projectUrl,publishableKey,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
     const next=client.channel(topic,{config:{broadcast:{self:false}}});
+    channel=next;channelTopic=topic;
     next.on('broadcast',{event:'state_changed'},payload=>{
       const version=Number(payload?.payload?.version);
       if(Number.isFinite(version)&&version<=Number(MP.lastVersion))return;
       if(typeof MP.syncNow==='function')MP.syncNow();
     });
     next.subscribe((status,err)=>{
-      if(status==='SUBSCRIBED'){channel=next;channelTopic=topic;MP.realtimeConnected=true;return}
+      if(status==='SUBSCRIBED'){MP.realtimeConnected=true;return}
       if(status==='CHANNEL_ERROR'||status==='TIMED_OUT'||status==='CLOSED'){
         MP.realtimeConnected=false;
+        if(channel===next){channel=null;channelTopic=null}
         if(err)console.warn('[IN-SECT MP REALTIME]',status,err);
       }
     });
-  }catch(e){MP.realtimeConnected=false;console.warn('[IN-SECT MP REALTIME] connect',e)}
+  }catch(e){channel=null;channelTopic=null;MP.realtimeConnected=false;console.warn('[IN-SECT MP REALTIME] connect',e)}
 }
 
 async function ensure(){
