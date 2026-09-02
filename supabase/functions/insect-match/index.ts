@@ -35,6 +35,29 @@ async function identify(match: any, secret: string) {
   if (match.guest_secret_hash && hash === match.guest_secret_hash) return 'guest'
   return null
 }
+async function realtimeTopic(match: any) {
+  if (!match?.id || !match?.host_secret_hash || !match?.guest_secret_hash) return null
+  const token = await sha256(`insect-realtime-v1:${match.id}:${match.host_secret_hash}:${match.guest_secret_hash}`)
+  return `insect-${token}`
+}
+async function broadcastStateChanged(match: any, version: number) {
+  try {
+    const topic = await realtimeTopic(match)
+    if (!topic) return
+    const response = await fetch(`${url}/realtime/v1/api/broadcast/${encodeURIComponent(topic)}/events/state_changed`, {
+      method: 'POST',
+      headers: {
+        apikey: serviceRole,
+        authorization: `Bearer ${serviceRole}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ version: Number(version) }),
+    })
+    if (!response.ok) console.warn('realtime_broadcast_failed', response.status, await response.text())
+  } catch (error) {
+    console.warn('realtime_broadcast_failed', error)
+  }
+}
 function currentColor(state: any) {
   const order = state?.G?.order, idx = state?.G?.idx
   return Array.isArray(order) && Number.isInteger(idx) ? (order[idx] || null) : null
@@ -174,6 +197,7 @@ Deno.serve(async (req) => {
     if (!secret) return json({ ok: false, error: 'Secret de session manquant.' }, 401)
     const role = await identify(match, secret)
     if (!role) return json({ ok: false, error: 'Session invalide.' }, 403)
+    const rtTopic = await realtimeTopic(match)
 
     if (action === 'vote_sp') {
       if (match.status !== 'active' || match.state) return json({ ok: false, error: 'Le vote est fermé.' }, 409)
@@ -191,12 +215,12 @@ Deno.serve(async (req) => {
         if (decideError) throw decideError
         match = data || await getMatch(code)
       }
-      return json({ ok: true, role, ...publicRules(match) })
+      return json({ ok: true, role, realtime_topic: rtTopic, ...publicRules(match) })
     }
 
     if (action === 'get') {
       const since = Number(body?.since ?? -1)
-      return json({ ok: true, role, status: match.status, version: Number(match.version), state: Number(match.version) > since ? match.state : null, ...publicRules(match) })
+      return json({ ok: true, role, status: match.status, version: Number(match.version), state: Number(match.version) > since ? match.state : null, realtime_topic: rtTopic, ...publicRules(match) })
     }
 
     if (action === 'push') {
@@ -216,7 +240,8 @@ Deno.serve(async (req) => {
         .eq('id', match.id).eq('version', match.version).select('version,status').maybeSingle()
       if (error) throw error
       if (!data) return json({ ok: false, error: 'Conflit de synchronisation. Rechargez la partie.' }, 409)
-      return json({ ok: true, version: Number(data.version), status: data.status })
+      await broadcastStateChanged(match, Number(data.version))
+      return json({ ok: true, version: Number(data.version), status: data.status, realtime_topic: rtTopic })
     }
     return json({ ok: false, error: 'Action inconnue.' }, 400)
   } catch (err) {
