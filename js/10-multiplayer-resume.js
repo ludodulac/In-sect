@@ -37,8 +37,8 @@ async function apiGet(since){
   return d;
 }
 function turnKey(){
-  if(!window.G)return null;
-  return`${Number(G.turn||0)}:${Number(G.idx||0)}:${Number(window._gameTurns||0)}`;
+  if(!G)return null;
+  return`${Number(G.turn||0)}:${Number(G.idx||0)}:${Number(_gameTurns||0)}`;
 }
 function rebuild(){
   G.board=Array.from({length:9},()=>Array(9).fill(null));
@@ -50,15 +50,15 @@ function applyState(s){
   if(!s?.G)return false;
   MP.applyingRemote=true;
   try{
-    window._mode=1;
-    window._aiLevel=s.aiLevel||1;
-    window._selColor=MP.localColor;
-    window._optSP=!!s.optSP;
-    window._uid=Number(s.uid||0);
-    window._gameTurns=Number(s.turns||0);
-    window._gameCaps=Number(s.caps||0);
-    window._moveLog=Array.isArray(s.moveLog)?s.moveLog:[];
-    window.G=s.G;
+    _mode=1;
+    _aiLevel=s.aiLevel||1;
+    _selColor=MP.localColor;
+    _optSP=!!s.optSP;
+    _uid=Number(s.uid||0);
+    _gameTurns=Number(s.turns||0);
+    _gameCaps=Number(s.caps||0);
+    _moveLog=Array.isArray(s.moveLog)?s.moveLog:[];
+    G=s.G;
     G.human=MP.localColor;
     G.mode1=true;
     G.sel=null;
