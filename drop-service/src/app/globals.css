@@ -3,14 +3,38 @@ html, body { margin: 0; padding: 0; font-family: Arial, Helvetica, sans-serif; b
 a { color: inherit; }
 button, input, textarea, select { font: inherit; }
 main { width: min(920px, calc(100% - 32px)); margin: 0 auto; }
+.container { padding: 48px 0 72px; }
+.narrow { width: min(560px, calc(100% - 32px)); }
 .card { background: white; border: 1px solid #e5e7eb; border-radius: 16px; padding: 20px; box-shadow: 0 8px 30px rgba(0,0,0,.04); }
-.stack { display: grid; gap: 14px; }
+.stack, .form-grid { display: grid; gap: 14px; }
 label { display: grid; gap: 6px; font-weight: 600; }
 input, textarea, select { width: 100%; padding: 12px; border: 1px solid #cfd4da; border-radius: 10px; background: white; }
 textarea { min-height: 120px; resize: vertical; }
 button { border: 0; border-radius: 10px; padding: 12px 16px; background: #111827; color: white; cursor: pointer; }
+button.secondary { background: white; color: #111827; border: 1px solid #d0d5dd; }
 button:disabled { opacity: .55; cursor: default; }
 .muted { color: #667085; }
 .success { color: #166534; }
 .error { color: #b42318; }
-@media (max-width: 640px) { main { width: min(100% - 20px, 920px); } .card { padding: 16px; border-radius: 12px; } }
+.eyebrow { margin: 0 0 6px; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #667085; }
+.dashboard-head { display: flex; gap: 20px; align-items: flex-start; justify-content: space-between; margin-bottom: 28px; }
+.dashboard-head h1 { margin: 0 0 8px; }
+.request-grid { display: grid; gap: 16px; }
+.request-card { display: grid; gap: 14px; }
+.request-card p { margin: 0; }
+.request-topline { display: flex; gap: 16px; align-items: flex-start; justify-content: space-between; }
+.request-topline p { margin-top: 4px; color: #667085; }
+.badge { display: inline-flex; border-radius: 999px; padding: 5px 9px; font-size: 12px; font-weight: 700; text-transform: uppercase; }
+.urgency-low { background: #f2f4f7; color: #475467; }
+.urgency-normal { background: #eff8ff; color: #175cd3; }
+.urgency-urgent { background: #fff1f0; color: #b42318; }
+@media (max-width: 640px) {
+  main { width: min(100% - 20px, 920px); }
+  .narrow { width: min(100% - 20px, 560px); }
+  .container { padding-top: 28px; }
+  .card { padding: 16px; border-radius: 12px; }
+  .dashboard-head { align-items: stretch; flex-direction: column; }
+  .dashboard-head button { width: 100%; }
+  .request-topline { align-items: stretch; flex-direction: column; }
+  .badge { width: fit-content; }
+}
