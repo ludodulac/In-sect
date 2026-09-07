@@ -58,11 +58,16 @@ export default function DashboardPage() {
       .from('drop_service_artisans')
       .select('id, company_name, slug')
       .eq('user_id', authData.user.id)
-      .single()
+      .maybeSingle()
 
-    if (artisanError || !artisanData) {
-      setError("Aucun profil artisan n'est encore lié à ce compte.")
+    if (artisanError) {
+      setError('Impossible de charger le profil artisan.')
       setLoading(false)
+      return
+    }
+
+    if (!artisanData) {
+      router.replace('/onboarding')
       return
     }
 
