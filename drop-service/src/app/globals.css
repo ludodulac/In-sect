@@ -10,9 +10,15 @@ main { width: min(920px, calc(100% - 32px)); margin: 0 auto; }
 label { display: grid; gap: 6px; font-weight: 600; }
 input, textarea, select { width: 100%; padding: 12px; border: 1px solid #cfd4da; border-radius: 10px; background: white; }
 textarea { min-height: 120px; resize: vertical; }
-button { border: 0; border-radius: 10px; padding: 12px 16px; background: #111827; color: white; cursor: pointer; }
+button, .button-link { border: 0; border-radius: 10px; padding: 12px 16px; background: #111827; color: white; cursor: pointer; text-decoration: none; text-align: center; font-weight: 600; }
 button.secondary { background: white; color: #111827; border: 1px solid #d0d5dd; }
 button:disabled { opacity: .55; cursor: default; }
+.secondary-link { background: white; color: #111827; border: 1px solid #d0d5dd; }
+.home-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
+.slug-field { display: grid; grid-template-columns: auto 1fr; align-items: center; border: 1px solid #cfd4da; border-radius: 10px; background: white; overflow: hidden; }
+.slug-field span { padding-left: 12px; color: #667085; }
+.slug-field input { border: 0; border-radius: 0; }
+.slug-field input:focus { outline: none; }
 .muted { color: #667085; }
 .success { color: #166534; }
 .error { color: #b42318; }
@@ -37,4 +43,5 @@ button:disabled { opacity: .55; cursor: default; }
   .dashboard-head button { width: 100%; }
   .request-topline { align-items: stretch; flex-direction: column; }
   .badge { width: fit-content; }
+  .home-actions { display: grid; }
 }
