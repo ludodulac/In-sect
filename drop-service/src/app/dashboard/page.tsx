@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -92,10 +93,7 @@ export default function DashboardPage() {
     const previous = requests
     setRequests((current) => current.map((request) => request.id === id ? { ...request, status } : request))
 
-    const { error } = await supabase
-      .from('drop_service_requests')
-      .update({ status })
-      .eq('id', id)
+    const { error } = await supabase.from('drop_service_requests').update({ status }).eq('id', id)
 
     if (error) {
       setRequests(previous)
@@ -109,9 +107,7 @@ export default function DashboardPage() {
     router.refresh()
   }
 
-  if (loading) {
-    return <main className="container"><p>Chargement…</p></main>
-  }
+  if (loading) return <main className="container"><p>Chargement…</p></main>
 
   return (
     <main className="container">
@@ -154,6 +150,8 @@ export default function DashboardPage() {
                   {Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                 </select>
               </label>
+
+              <Link className="button-link secondary-link" href={`/dashboard/requests/${request.id}`}>Voir la demande</Link>
             </article>
           ))}
         </section>
