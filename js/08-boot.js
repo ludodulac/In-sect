@@ -112,6 +112,8 @@ async function loadMultiplayerClient() {
     await loadScriptOnce('insect-mp-config', 'js/09-multiplayer-config.js');
     await loadScriptOnce('insect-mp-runtime', 'js/09-multiplayer-runtime.js');
     await loadScriptOnce('insect-mp-client', 'js/09-multiplayer.js');
+    // Online board input is intercepted here before legacy humanClickCell mutations.
+    await loadScriptOnce('insect-mp-intent', 'js/09-multiplayer-intent.js');
     await loadScriptOnce('insect-mp-resume', 'js/10-multiplayer-resume.js');
     await loadScriptOnce('insect-mp-ready', 'js/11-multiplayer-ready.js');
     await loadScriptOnce('insect-mp-realtime', 'js/12-multiplayer-realtime.js');
