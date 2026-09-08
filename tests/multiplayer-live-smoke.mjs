@@ -1,3 +1,4 @@
+// Live integration: HTTP authority + Supabase Realtime wakeups on the deployed functions.
 import assert from 'node:assert/strict';
 import { createClient } from '@supabase/supabase-js';
 
