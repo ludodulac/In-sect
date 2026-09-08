@@ -40,7 +40,7 @@ async function realtimeTopic(match: any) {
   const token = await sha256(`insect-realtime-v1:${match.id}:${match.host_secret_hash}:${match.guest_secret_hash}`)
   return `insect-${token}`
 }
-async function broadcastStateChanged(match: any, version: number) {
+async function broadcastStateChanged(match: any, version: number, event: any = null) {
   try {
     const topic = await realtimeTopic(match)
     if (!topic) return
@@ -51,7 +51,7 @@ async function broadcastStateChanged(match: any, version: number) {
         authorization: `Bearer ${serviceRole}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ version: Number(version) }),
+      body: JSON.stringify({ version: Number(version), event: event || null }),
     })
     if (!response.ok) console.warn('realtime_broadcast_failed', response.status, await response.text())
   } catch (error) {
@@ -70,6 +70,84 @@ function publicRules(match: any) {
     sp_enabled: match.sp_enabled,
     sp_random: match.host_sp_vote !== null && match.guest_sp_vote !== null && match.host_sp_vote !== match.guest_sp_vote,
   }
+}
+function flattenPieces(state: any) {
+  const result = new Map<string, any>()
+  for (const color of Object.keys(state?.G?.players || {})) {
+    for (const p of state.G.players[color]?.pieces || []) {
+      const id = String(p?.id)
+      if (!result.has(id)) result.set(id, { id: p.id, color: p.color, type: p.type, r: p.r, c: p.c, dead: !!p.dead })
+    }
+  }
+  return result
+}
+function canonicalChanges(before: any, after: any) {
+  const b = flattenPieces(before), a = flattenPieces(after), changes: any[] = []
+  const ids = new Set([...b.keys(), ...a.keys()])
+  for (const id of ids) {
+    const from = b.get(id) || null, to = a.get(id) || null
+    if (!from && to) { changes.push({ kind: 'piece_added', id: to.id, to }); continue }
+    if (from && !to) { changes.push({ kind: 'piece_removed', id: from.id, from }); continue }
+    if (!from || !to) continue
+    const moved = from.r !== to.r || from.c !== to.c
+    const dead = from.dead !== to.dead
+    const color = from.color !== to.color
+    if (moved || dead || color) changes.push({ kind: 'piece_changed', id: to.id, color: to.color, type: to.type, from: { r: from.r, c: from.c, dead: from.dead, color: from.color }, to: { r: to.r, c: to.c, dead: to.dead, color: to.color } })
+  }
+  return changes
+}
+function stable(value: any): string {
+  if (Array.isArray(value)) return `[${value.map(stable).join(',')}]`
+  if (value && typeof value === 'object') return `{${Object.keys(value).sort().map(k => `${JSON.stringify(k)}:${stable(value[k])}`).join(',')}}`
+  return JSON.stringify(value)
+}
+function validateSnapshotShape(state: any, match: any) {
+  if (!state || state.schema !== 1 || !state.G || !state.G.players || !Array.isArray(state.G.order)) return 'État de partie invalide.'
+  if (!!state.optSP !== !!match.sp_enabled) return 'Réglage des super pouvoirs invalide.'
+  const idx = Number(state.G.idx)
+  if (!Number.isInteger(idx) || idx < 0 || idx >= state.G.order.length) return 'Joueur courant invalide.'
+  if (!state.G.order.includes('yellow') || !state.G.order.includes('red')) return 'Participants de partie invalides.'
+  return null
+}
+function validatePieceIdentity(before: any, after: any) {
+  const b = flattenPieces(before), a = flattenPieces(after)
+  if (b.size !== a.size) return 'Le nombre de pièces a changé de manière invalide.'
+  for (const [id, from] of b) {
+    const to = a.get(id)
+    if (!to) return 'Une pièce connue a disparu du snapshot.'
+    if (from.type !== to.type) return 'Le type d’une pièce ne peut pas changer.'
+  }
+  return null
+}
+function validateCommit(match: any, role: string, state: any, event: any, baseVersion: number) {
+  const shapeError = validateSnapshotShape(state, match)
+  if (shapeError) return shapeError
+  if (!Number.isInteger(baseVersion) || baseVersion < 0) return 'Version de base invalide.'
+  if (baseVersion !== Number(match.version)) return 'Version périmée. Récupérez l’état serveur avant de rejouer.'
+  const playerColor = role === 'host' ? 'yellow' : 'red'
+  if (!event || event.schema !== 1 || !['turn_committed', 'match_initialized'].includes(String(event.kind))) return 'Événement de jeu invalide.'
+  if (event.actor_color !== playerColor) return 'La couleur de l’action ne correspond pas au siège.'
+  if (Number(event.base_version) !== baseVersion) return 'La version de l’événement ne correspond pas à la requête.'
+
+  if (!match.state) {
+    if (role !== 'host' || event.kind !== 'match_initialized') return 'Le joueur hôte doit initialiser la partie.'
+    if (currentColor(state) !== 'yellow' || Number(state.G.turn || 0) !== 0 || !!state.G.over) return 'État initial invalide.'
+    if (stable(event.changes || []) !== stable(canonicalChanges(null, state))) return 'L’événement initial ne correspond pas au snapshot.'
+    return null
+  }
+
+  const beforeColor = currentColor(match.state)
+  if (beforeColor !== playerColor) return "Ce n'est pas votre tour."
+  if (event.kind !== 'turn_committed') return 'Type d’événement invalide pour une partie commencée.'
+  if (event.current_before !== beforeColor) return 'Joueur courant de base incohérent.'
+  if (event.current_after !== currentColor(state)) return 'Joueur courant final incohérent.'
+  const beforeTurn = Number(match.state?.G?.turn || 0), afterTurn = Number(state?.G?.turn || 0)
+  if (!Number.isInteger(afterTurn) || afterTurn !== beforeTurn + 1) return 'Compteur de tour incohérent.'
+  const identityError = validatePieceIdentity(match.state, state)
+  if (identityError) return identityError
+  const expectedChanges = canonicalChanges(match.state, state)
+  if (stable(event.changes || []) !== stable(expectedChanges)) return 'L’événement ne décrit pas exactement le changement de partie.'
+  return null
 }
 async function createRoom(hostSecret: string, guestSecret?: string) {
   const hostHash = await sha256(hostSecret)
@@ -97,53 +175,25 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'matchmake_start') {
-      const queueSecret = randomSecret()
-      const queueHash = await sha256(queueSecret)
-      const now = new Date()
-      const nowIso = now.toISOString()
-      const freshCutoff = new Date(now.getTime() - 5000).toISOString()
+      const queueSecret = randomSecret(), queueHash = await sha256(queueSecret)
+      const now = new Date(), nowIso = now.toISOString(), freshCutoff = new Date(now.getTime() - 5000).toISOString()
       await db.from('insect_matchmaking_queue').delete().lt('expires_at', nowIso)
-
       const { data: waiting, error: waitError } = await db.from('insect_matchmaking_queue')
         .select('*').is('matched_code', null).eq('consumed', false).gt('expires_at', nowIso).gt('last_seen_at', freshCutoff)
         .order('requested_at', { ascending: true }).limit(1).maybeSingle()
       if (waitError) throw waitError
-
       if (!waiting) {
-        const { error } = await db.from('insect_matchmaking_queue').insert({
-          player_secret_hash: queueHash,
-          queue_secret_hash: queueHash,
-          requested_at: nowIso,
-          last_seen_at: nowIso,
-          expires_at: new Date(now.getTime() + 120000).toISOString(),
-        })
+        const { error } = await db.from('insect_matchmaking_queue').insert({ player_secret_hash: queueHash, queue_secret_hash: queueHash, requested_at: nowIso, last_seen_at: nowIso, expires_at: new Date(now.getTime() + 120000).toISOString() })
         if (error) throw error
         return json({ ok: true, matched: false, queue_secret: queueSecret })
       }
-
-      const hostSecret = randomSecret()
-      const guestSecret = randomSecret()
-      const room = await createRoom(hostSecret, guestSecret)
+      const hostSecret = randomSecret(), guestSecret = randomSecret(), room = await createRoom(hostSecret, guestSecret)
       const { data: claimed, error: claimError } = await db.from('insect_matchmaking_queue')
         .update({ matched_code: room.code, matched_role: 'host', match_secret: hostSecret })
         .eq('id', waiting.id).is('matched_code', null).gt('last_seen_at', freshCutoff).select('id').maybeSingle()
       if (claimError) throw claimError
-      if (!claimed) {
-        await db.from('insect_matches').delete().eq('code', room.code)
-        return json({ ok: false, error: 'Conflit de matchmaking, réessayez.' }, 409)
-      }
-
-      const { error: insertError } = await db.from('insect_matchmaking_queue').insert({
-        player_secret_hash: queueHash,
-        queue_secret_hash: queueHash,
-        requested_at: nowIso,
-        last_seen_at: nowIso,
-        matched_code: room.code,
-        matched_role: 'guest',
-        match_secret: guestSecret,
-        consumed: true,
-        expires_at: new Date(now.getTime() + 120000).toISOString(),
-      })
+      if (!claimed) { await db.from('insect_matches').delete().eq('code', room.code); return json({ ok: false, error: 'Conflit de matchmaking, réessayez.' }, 409) }
+      const { error: insertError } = await db.from('insect_matchmaking_queue').insert({ player_secret_hash: queueHash, queue_secret_hash: queueHash, requested_at: nowIso, last_seen_at: nowIso, matched_code: room.code, matched_role: 'guest', match_secret: guestSecret, consumed: true, expires_at: new Date(now.getTime() + 120000).toISOString() })
       if (insertError) throw insertError
       return json({ ok: true, matched: true, queue_secret: queueSecret, code: room.code, secret: guestSecret, role: 'guest', status: 'active' })
     }
@@ -155,21 +205,9 @@ Deno.serve(async (req) => {
       const { data: q, error } = await db.from('insect_matchmaking_queue').select('*').eq('queue_secret_hash', qh).maybeSingle()
       if (error) throw error
       if (!q) return json({ ok: false, error: 'Recherche introuvable ou expirée.' }, 404)
-
-      if (action === 'matchmake_cancel') {
-        if (!q.matched_code) await db.from('insect_matchmaking_queue').delete().eq('id', q.id)
-        return json({ ok: true, cancelled: !q.matched_code, matched: !!q.matched_code })
-      }
-
-      if (new Date(q.expires_at).getTime() < Date.now() && !q.matched_code) {
-        await db.from('insect_matchmaking_queue').delete().eq('id', q.id)
-        return json({ ok: true, matched: false, expired: true })
-      }
-      if (!q.matched_code) {
-        await db.from('insect_matchmaking_queue').update({ last_seen_at: new Date().toISOString() }).eq('id', q.id)
-        return json({ ok: true, matched: false })
-      }
-
+      if (action === 'matchmake_cancel') { if (!q.matched_code) await db.from('insect_matchmaking_queue').delete().eq('id', q.id); return json({ ok: true, cancelled: !q.matched_code, matched: !!q.matched_code }) }
+      if (new Date(q.expires_at).getTime() < Date.now() && !q.matched_code) { await db.from('insect_matchmaking_queue').delete().eq('id', q.id); return json({ ok: true, matched: false, expired: true }) }
+      if (!q.matched_code) { await db.from('insect_matchmaking_queue').update({ last_seen_at: new Date().toISOString() }).eq('id', q.id); return json({ ok: true, matched: false }) }
       await db.from('insect_matchmaking_queue').update({ consumed: true, last_seen_at: new Date().toISOString() }).eq('id', q.id)
       return json({ ok: true, matched: true, code: q.matched_code, secret: q.match_secret, role: q.matched_role, status: 'active' })
     }
@@ -220,29 +258,51 @@ Deno.serve(async (req) => {
 
     if (action === 'get') {
       const since = Number(body?.since ?? -1)
-      return json({ ok: true, role, status: match.status, version: Number(match.version), state: Number(match.version) > since ? match.state : null, realtime_topic: rtTopic, ...publicRules(match) })
+      return json({ ok: true, role, status: match.status, version: Number(match.version), state: Number(match.version) > since ? match.state : null, event: Number(match.version) > since ? (match.state?._mp_event || null) : null, realtime_topic: rtTopic, ...publicRules(match) })
     }
 
+    if (action === 'commit_turn') {
+      if (match.status !== 'active') return json({ ok: false, error: 'Partie non active.' }, 409)
+      if (match.sp_enabled === null) return json({ ok: false, error: 'Les deux joueurs doivent voter avant de commencer.' }, 409)
+      const baseVersion = Number(body?.base_version)
+      const state = body?.state
+      const proposedEvent = body?.event
+      const validationError = validateCommit(match, role, state, proposedEvent, baseVersion)
+      if (validationError) return json({ ok: false, error: validationError, server_version: Number(match.version) }, 409)
+
+      const nextVersion = Number(match.version) + 1
+      const acceptedEvent = { ...proposedEvent, base_version: Number(match.version), result_version: nextVersion, accepted_at: Date.now() }
+      const persistedState = { ...state, _mp_event: acceptedEvent }
+      const nextStatus = state?.G?.over ? 'finished' : 'active'
+      const { data, error } = await db.from('insect_matches').update({ state: persistedState, version: nextVersion, status: nextStatus, updated_at: new Date().toISOString() })
+        .eq('id', match.id).eq('version', baseVersion).select('version,status').maybeSingle()
+      if (error) throw error
+      if (!data) return json({ ok: false, error: 'Conflit de synchronisation. Récupérez la version serveur.', server_version: Number(match.version) }, 409)
+      await broadcastStateChanged(match, Number(data.version), acceptedEvent)
+      return json({ ok: true, version: Number(data.version), status: data.status, event: acceptedEvent, realtime_topic: rtTopic })
+    }
+
+    // Compatibilité temporaire avec les anciens clients/PWA en cache.
     if (action === 'push') {
       if (match.status !== 'active') return json({ ok: false, error: 'Partie non active.' }, 409)
       if (match.sp_enabled === null) return json({ ok: false, error: 'Les deux joueurs doivent voter avant de commencer.' }, 409)
       const state = body?.state
-      if (!state || state.schema !== 1 || !state.G) return json({ ok: false, error: 'État de partie invalide.' }, 400)
-      if (!!state.optSP !== !!match.sp_enabled) return json({ ok: false, error: 'Réglage des super pouvoirs invalide.' }, 409)
+      const shapeError = validateSnapshotShape(state, match)
+      if (shapeError) return json({ ok: false, error: shapeError }, 400)
       const playerColor = role === 'host' ? 'yellow' : 'red'
       if (match.state) {
         const before = currentColor(match.state)
         if (before && before !== playerColor) return json({ ok: false, error: "Ce n'est pas votre tour." }, 409)
       } else if (role !== 'host') return json({ ok: false, error: 'Le joueur hôte doit initialiser la partie.' }, 409)
-
       const nextVersion = Number(match.version) + 1, nextStatus = state?.G?.over ? 'finished' : 'active'
       const { data, error } = await db.from('insect_matches').update({ state, version: nextVersion, status: nextStatus, updated_at: new Date().toISOString() })
         .eq('id', match.id).eq('version', match.version).select('version,status').maybeSingle()
       if (error) throw error
       if (!data) return json({ ok: false, error: 'Conflit de synchronisation. Rechargez la partie.' }, 409)
-      await broadcastStateChanged(match, Number(data.version))
-      return json({ ok: true, version: Number(data.version), status: data.status, realtime_topic: rtTopic })
+      await broadcastStateChanged(match, Number(data.version), null)
+      return json({ ok: true, version: Number(data.version), status: data.status, realtime_topic: rtTopic, legacy: true })
     }
+
     return json({ ok: false, error: 'Action inconnue.' }, 400)
   } catch (err) {
     console.error(err)
