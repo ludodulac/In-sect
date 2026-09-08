@@ -7,12 +7,18 @@ on:
       - multiplayer-authoritative-runtime
     paths:
       - 'js/09-multiplayer-runtime.js'
+      - 'js/09-multiplayer-intent.js'
+      - 'supabase/functions/_shared/**'
+      - 'supabase/functions/insect-play/**'
       - 'supabase/functions/insect-match/**'
       - 'tests/**'
       - '.github/workflows/insect-multiplayer-tests.yml'
   pull_request:
     paths:
       - 'js/09-multiplayer-runtime.js'
+      - 'js/09-multiplayer-intent.js'
+      - 'supabase/functions/_shared/**'
+      - 'supabase/functions/insect-play/**'
       - 'supabase/functions/insect-match/**'
       - 'tests/**'
       - '.github/workflows/insect-multiplayer-tests.yml'
@@ -28,6 +34,8 @@ jobs:
           node-version: '22'
       - name: Runtime and perspective tests
         run: node --test tests/multiplayer-runtime.test.js
+      - name: Browser controller syntax
+        run: node --check js/09-multiplayer-intent.js
 
   authoritative-rules:
     runs-on: ubuntu-latest
@@ -39,3 +47,5 @@ jobs:
           deno-version: v2.x
       - name: Pure server rules tests
         run: deno test supabase/functions/insect-match/rules-kernel.test.ts
+      - name: Edge Function type check
+        run: deno check supabase/functions/insect-play/index.ts
