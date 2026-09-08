@@ -1,34 +1,21 @@
-/* IN-SECT — garde d'initialisation multijoueur : pas d'entrée avant premier état serveur + repaint différé. */
+/* IN-SECT — reflet visuel de l'état online. Aucun wrapper du moteur. */
 (function(){
 'use strict';
-const MP=window.INSECT_MP;
-if(!MP)return;
-let seenVersion=Number.isFinite(MP.lastVersion)?Number(MP.lastVersion):-1;
+const RT=window.INSECT_MP_RUNTIME;
+if(!RT)return;
 
-function serverReady(){return !MP.active||Number(MP.lastVersion)>=0}
-function repaint(){
-  if(!MP.active||!G||G.over)return;
+function repaint(state){
+  if(!state.online)return;
   requestAnimationFrame(()=>{
-    if(typeof renderBoard==='function')renderBoard();
-    if(typeof renderPlayers==='function')renderPlayers();
-    if(typeof updateTurnUI==='function')updateTurnUI();
+    if(typeof updateTurnUI==='function'&&G&&G.order)updateTurnUI();
+    const board=document.getElementById('board');
+    if(board){
+      const enabled=RT.allowsBoardInput()&&typeof cur==='function'&&cur()===state.controlledColor;
+      board.dataset.onlineInteractive=enabled?'1':'0';
+      board.setAttribute('aria-busy',['waiting_initial_state','action_sent','waiting_confirmation','receiving_opponent_action','animating_accepted_action','reconnecting'].includes(state.phase)?'true':'false');
+    }
   });
 }
-
-if(typeof isHuman==='function'&&!isHuman.__mpInitialReady){
-  const originalIsHuman=isHuman;
-  isHuman=function(){
-    if(MP.active&&!serverReady())return false;
-    return originalIsHuman.apply(this,arguments);
-  };
-  isHuman.__mpInitialReady=true;
-}
-
-setInterval(()=>{
-  const v=Number.isFinite(MP.lastVersion)?Number(MP.lastVersion):-1;
-  if(v!==seenVersion){
-    seenVersion=v;
-    if(v>=0)repaint();
-  }
-},100);
+RT.subscribe(repaint);
+repaint(RT.snapshot());
 })();

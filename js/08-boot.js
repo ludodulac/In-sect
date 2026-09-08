@@ -88,36 +88,45 @@ function installAnalyticsHooks() {
   }
 }
 
-function loadMultiplayerClient() {
+// Chargement strictement ordonné : runtime → transport → playback → intentions → reprise → UI → Realtime.
+// Cette chaîne reste dynamique pour ne rien imposer au démarrage solo/IA.
+function loadScriptOnce(id, src) {
+  return new Promise((resolve, reject) => {
+    const existing = document.getElementById(id);
+    if (existing) {
+      if (existing.dataset.loaded === '1') return resolve();
+      existing.addEventListener('load', resolve, { once: true });
+      existing.addEventListener('error', reject, { once: true });
+      return;
+    }
+    const script = document.createElement('script');
+    script.id = id;
+    script.src = src;
+    script.onload = () => { script.dataset.loaded = '1'; resolve(); };
+    script.onerror = reject;
+    document.body.appendChild(script);
+  });
+}
+
+async function loadMultiplayerClient() {
   if (document.getElementById('insect-mp-config')) return;
-  const cfg = document.createElement('script');
-  cfg.id = 'insect-mp-config';
-  cfg.src = 'js/09-multiplayer-config.js';
-  cfg.onload = () => {
-    const mp = document.createElement('script');
-    mp.id = 'insect-mp-client';
-    mp.src = 'js/09-multiplayer.js';
-    mp.onload = () => {
-      const resume = document.createElement('script');
-      resume.id = 'insect-mp-resume';
-      resume.src = 'js/10-multiplayer-resume.js';
-      resume.onload = () => {
-        const ready = document.createElement('script');
-        ready.id = 'insect-mp-ready';
-        ready.src = 'js/11-multiplayer-ready.js';
-        ready.onload = () => {
-          const realtime = document.createElement('script');
-          realtime.id = 'insect-mp-realtime';
-          realtime.src = 'js/12-multiplayer-realtime.js';
-          document.body.appendChild(realtime);
-        };
-        document.body.appendChild(ready);
-      };
-      document.body.appendChild(resume);
-    };
-    document.body.appendChild(mp);
-  };
-  document.body.appendChild(cfg);
+  try {
+    await loadScriptOnce('insect-mp-config', 'js/09-multiplayer-config.js');
+    await loadScriptOnce('insect-mp-runtime', 'js/09-multiplayer-runtime.js');
+    await loadScriptOnce('insect-mp-client', 'js/09-multiplayer.js');
+    await loadScriptOnce('insect-mp-event-player', 'js/09-multiplayer-event-player.js');
+    await loadScriptOnce('insect-mp-intent', 'js/09-multiplayer-intent.js');
+    await loadScriptOnce('insect-mp-resume', 'js/10-multiplayer-resume.js');
+    await loadScriptOnce('insect-mp-ready', 'js/11-multiplayer-ready.js');
+    await loadScriptOnce('insect-mp-realtime', 'js/12-multiplayer-realtime.js');
+  } catch (error) {
+    console.error('[IN-SECT MP BOOT]', error);
+    if (window.INSECT_MP_RUNTIME) window.INSECT_MP_RUNTIME.setError(error);
+  }
+}
+
+function isOnlineSession() {
+  return !!(window.INSECT_MP_RUNTIME && window.INSECT_MP_RUNTIME.isOnline());
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -131,7 +140,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden' && G && !G.over) {
-      saveGame();
+      // Une partie online se restaure depuis Supabase : ne jamais l'écraser avec la sauvegarde solo locale.
+      if (!isOnlineSession()) saveGame();
       gaTrack('game_backgrounded', { turns_played: _gameTurns, pieces_captured: _gameCaps });
     }
     if (document.visibilityState === 'visible') {
@@ -140,9 +150,9 @@ document.addEventListener('DOMContentLoaded', () => {
       if (isGameScreen && G && !G.over) { buildBoard(); renderBoard(); renderPlayers(); updateTurnUI(); }
     }
   });
-  window.addEventListener('beforeunload', () => { if (G && !G.over) saveGame(); });
-  window.addEventListener('pagehide', () => { if (G && !G.over) saveGame(); });
-  setInterval(() => { if (G && !G.over) saveGame(); }, 15000);
+  window.addEventListener('beforeunload', () => { if (G && !G.over && !isOnlineSession()) saveGame(); });
+  window.addEventListener('pagehide', () => { if (G && !G.over && !isOnlineSession()) saveGame(); });
+  setInterval(() => { if (G && !G.over && !isOnlineSession()) saveGame(); }, 15000);
   window.addEventListener('pageshow', (e) => { if (e.persisted && G && !G.over) { buildBoard(); renderBoard(); renderPlayers(); updateTurnUI(); } });
   setTimeout(() => { const btn = document.getElementById('splash-enter-btn'); if (btn) btn.style.animation = 'splashBtnPulse 1.5s ease-in-out infinite'; }, 1800);
 });

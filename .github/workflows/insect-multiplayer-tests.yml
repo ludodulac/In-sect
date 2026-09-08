@@ -1,0 +1,100 @@
+name: IN-SECT multiplayer tests
+
+on:
+  push:
+    branches:
+      - main
+      - multiplayer-authoritative-runtime
+    paths:
+      - 'js/04-board.js'
+      - 'js/08-boot.js'
+      - 'js/09-multiplayer-runtime.js'
+      - 'js/09-multiplayer.js'
+      - 'js/09-multiplayer-event-player.js'
+      - 'js/09-multiplayer-intent.js'
+      - 'js/10-multiplayer-resume.js'
+      - 'js/11-multiplayer-ready.js'
+      - 'js/12-multiplayer-realtime.js'
+      - 'supabase/functions/_shared/**'
+      - 'supabase/functions/insect-play/**'
+      - 'supabase/functions/insect-match/**'
+      - 'tests/**'
+      - '.github/workflows/insect-multiplayer-tests.yml'
+  pull_request:
+    paths:
+      - 'js/04-board.js'
+      - 'js/08-boot.js'
+      - 'js/09-multiplayer-runtime.js'
+      - 'js/09-multiplayer.js'
+      - 'js/09-multiplayer-event-player.js'
+      - 'js/09-multiplayer-intent.js'
+      - 'js/10-multiplayer-resume.js'
+      - 'js/11-multiplayer-ready.js'
+      - 'js/12-multiplayer-realtime.js'
+      - 'supabase/functions/_shared/**'
+      - 'supabase/functions/insect-play/**'
+      - 'supabase/functions/insect-match/**'
+      - 'tests/**'
+      - '.github/workflows/insect-multiplayer-tests.yml'
+
+jobs:
+  multiplayer-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Runtime and perspective tests
+        run: node --test tests/multiplayer-runtime.test.js
+      - name: Browser multiplayer syntax and boot wiring
+        run: |
+          node --check js/04-board.js
+          node --check js/08-boot.js
+          node --check js/09-multiplayer-runtime.js
+          node --check js/09-multiplayer.js
+          node --check js/09-multiplayer-event-player.js
+          node --check js/09-multiplayer-intent.js
+          node --check js/10-multiplayer-resume.js
+          node --check js/11-multiplayer-ready.js
+          node --check js/12-multiplayer-realtime.js
+          grep -q "insect-mp-event-player" js/08-boot.js
+          grep -q "insect-mp-intent" js/08-boot.js
+      - name: Authoritative client boundary
+        run: |
+          test "$(grep -o "api('commit_turn'" js/09-multiplayer.js | wc -l)" -eq 1
+          ! grep -q "api('push'" js/09-multiplayer.js
+          ! grep -q "commitState:" js/09-multiplayer.js
+          grep -q "async function gamePoll(){if(!MP.code||!MP.secret||MP.eventPlayback)return;try{await syncNow(false)}" js/09-multiplayer.js
+          grep -q "ACTION_API" js/09-multiplayer-intent.js
+          grep -q "play_action" js/09-multiplayer-intent.js
+
+  authoritative-rules:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Pure server rules tests
+        run: deno test supabase/functions/insect-match/rules-kernel.test.ts
+      - name: Edge Functions type check
+        run: |
+          deno check supabase/functions/insect-match/index.ts
+          deno check supabase/functions/insect-play/index.ts
+
+  deployed-protocol-smoke:
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[live-smoke]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Realtime smoke dependency
+        run: npm install --no-save @supabase/supabase-js@2.95.3
+      - name: Exercise deployed Supabase protocol end-to-end
+        run: node tests/multiplayer-live-smoke.mjs
