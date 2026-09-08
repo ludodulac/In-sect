@@ -59,3 +59,15 @@ jobs:
         run: |
           deno check supabase/functions/insect-match/index.ts
           deno check supabase/functions/insect-play/index.ts
+
+  deployed-protocol-smoke:
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[live-smoke]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Exercise deployed Supabase protocol end-to-end
+        run: node tests/multiplayer-live-smoke.mjs
