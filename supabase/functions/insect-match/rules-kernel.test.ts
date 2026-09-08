@@ -1,5 +1,5 @@
 import { assertEquals, assert } from 'jsr:@std/assert@1'
-import { resolveIntent } from './rules-kernel.ts'
+import { resolveIntent } from '../_shared/insect-rules-kernel.ts'
 
 function baseSnapshot(){
   let id=0
@@ -15,7 +15,7 @@ function baseSnapshot(){
 Deno.test('yellow legal move is resolved without mutating input',()=>{
   const before=baseSnapshot();const original=JSON.stringify(before)
   const piece=before.G.players.yellow.pieces.find((p:any)=>p.type==='militant'&&p.r===0&&p.c===2)
-  const r=resolveIntent(before,{schema:1,kind:'move',piece_id:piece.id,to:{r:0,c:3}},'yellow',{spEnabled:false,rng:()=>0})
+  const r=resolveIntent(before,{schema:1,kind:'move',piece_id:piece.id,to:{r:0,c:3}},'yellow')
   assert(r.ok);if(!r.ok)return
   assertEquals(JSON.stringify(before),original)
   const moved=r.state.G.players.yellow.pieces.find((p:any)=>p.id===piece.id)
@@ -48,7 +48,6 @@ Deno.test('illegal geometry is rejected with no alternative branch',()=>{
 
 Deno.test('capture requires authoritative corpse placement',()=>{
   const s=baseSnapshot()
-  // Position minimale contrôlée pour tester la capture sans dépendre du setup complet.
   const y=s.G.players.yellow.pieces.find((x:any)=>x.type==='militant')
   const red=s.G.players.red.pieces.find((x:any)=>x.type==='militant')
   y.r=4;y.c=2;red.r=4;red.c=3
@@ -68,7 +67,7 @@ Deno.test('super-power double kill fails closed until parity coverage exists',()
   spider.r=4;spider.c=2;red.r=4;red.c=3
   for(const p of [...s.G.players.yellow.pieces,...s.G.players.red.pieces])if(p!==spider&&p!==red){p.r=-1;p.c=-1}
   s.G.spPieces[spider.id]={type:'double-kill',turns:null}
-  const r=resolveIntent(s,{schema:1,kind:'kill',piece_id:spider.id,target_id:red.id},'yellow',{spEnabled:true})
+  const r=resolveIntent(s,{schema:1,kind:'kill',piece_id:spider.id,target_id:red.id},'yellow')
   assertEquals(r.ok,false)
-  if(!r.ok)assert(r.error.includes('parité'))
+  if(!r.ok)assert(r.error.includes('certifié'))
 })
