@@ -6,6 +6,7 @@ on:
       - main
       - multiplayer-authoritative-runtime
     paths:
+      - 'js/08-boot.js'
       - 'js/09-multiplayer-runtime.js'
       - 'js/09-multiplayer.js'
       - 'js/09-multiplayer-intent.js'
@@ -16,6 +17,7 @@ on:
       - '.github/workflows/insect-multiplayer-tests.yml'
   pull_request:
     paths:
+      - 'js/08-boot.js'
       - 'js/09-multiplayer-runtime.js'
       - 'js/09-multiplayer.js'
       - 'js/09-multiplayer-intent.js'
@@ -36,10 +38,12 @@ jobs:
           node-version: '22'
       - name: Runtime and perspective tests
         run: node --test tests/multiplayer-runtime.test.js
-      - name: Browser multiplayer syntax
+      - name: Browser multiplayer syntax and boot wiring
         run: |
+          node --check js/08-boot.js
           node --check js/09-multiplayer.js
           node --check js/09-multiplayer-intent.js
+          grep -q "insect-mp-intent" js/08-boot.js
 
   authoritative-rules:
     runs-on: ubuntu-latest
