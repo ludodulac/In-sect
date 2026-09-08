@@ -94,5 +94,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Install Realtime smoke dependency
+        run: npm install --no-save @supabase/supabase-js@2.95.3
       - name: Exercise deployed Supabase protocol end-to-end
         run: node tests/multiplayer-live-smoke.mjs
