@@ -3,6 +3,7 @@
 'use strict';
 const MP=window.INSECT_MP,RT=window.INSECT_MP_RUNTIME;
 if(!MP||!RT)return;
+const ACTION_API=String(window.INSECT_MULTIPLAYER_ACTION_API||String(MP.api||'').replace(/\/insect-match$/,'/insect-play')).trim();
 
 const UI={pieceId:null,stage:'idle',draft:null,waiting:false};
 const clone=v=>v==null?v:JSON.parse(JSON.stringify(v));
@@ -60,7 +61,7 @@ async function submit(draft){
   if(UI.waiting||!RT.allowsBoardInput())return false;const intent=sanitizeIntent(draft),base=Number(MP.lastVersion);const pending=RT.beginAction({kind:intent.kind,base_version:base,actor_color:RT.snapshot().controlledColor,intent});if(!pending)return false;
   UI.waiting=true;clearClasses();if(typeof setInfoPhase==='function')setInfoPhase('VALIDATION DU COUP…');
   try{
-    const r=await fetch(MP.api,{method:'POST',headers:{'Content-Type':'application/json'},cache:'no-store',body:JSON.stringify({action:'play_action',code:MP.code,secret:MP.secret,base_version:base,intent})});let o=null;try{o=await r.json()}catch(_){}
+    const r=await fetch(ACTION_API,{method:'POST',headers:{'Content-Type':'application/json'},cache:'no-store',body:JSON.stringify({action:'play_action',code:MP.code,secret:MP.secret,base_version:base,intent})});let o=null;try{o=await r.json()}catch(_){}
     if(!r.ok||!o||o.ok===false)throw new Error(o?.error||`Erreur serveur (${r.status})`);
     RT.markWaitingConfirmation(Number(o.version));await animateAccepted(o.event);await MP.syncNow(true);reset();return true;
   }catch(e){console.error('[IN-SECT MP INTENT]',e);RT.setError(e);if(typeof toast==='function')toast(`Action refusée : ${e.message||e}`);if(typeof MP.syncNow==='function')await MP.syncNow(true).catch(()=>{});reset();return false}
@@ -89,5 +90,5 @@ function onClick(event){
 }
 document.addEventListener('click',onClick,true);
 RT.subscribe(s=>{if(!s.online||![RT.STATES.MY_TURN,RT.STATES.LOCAL_SELECTION].includes(s.phase))if(!UI.waiting)reset()});
-MP.cancelLocalIntent=reset;MP.localIntentState=()=>clone(UI);
+MP.cancelLocalIntent=reset;MP.localIntentState=()=>clone(UI);MP.actionApi=ACTION_API;
 })();
