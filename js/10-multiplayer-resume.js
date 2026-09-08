@@ -47,6 +47,29 @@ function unlockIfConfirmed(){
     MP.awaitingVersion=null;
   }
 }
+function localColorLabel(){return MP.localColor==='yellow'?'JAUNE':MP.localColor==='red'?'ROUGE':String(MP.localColor||'').toUpperCase()}
+function orientBoard(){
+  const board=document.getElementById('board');
+  if(!board)return;
+  const rotate=MP.active&&MP.localColor==='yellow';
+  board.style.transform=rotate?'rotate(180deg)':'';
+  board.style.transformOrigin='center center';
+  for(const piece of board.querySelectorAll('.piece'))piece.style.transform=rotate?'rotate(180deg)':'';
+}
+function refreshOnlineTurnUI(){
+  if(!MP.active||!G||typeof cur!=='function')return;
+  const c=cur();if(!c)return;
+  const ttxt=document.getElementById('turn-txt');
+  if(ttxt){
+    const mine=c===MP.localColor;
+    const name=(typeof CNAME!=='undefined'&&CNAME[c])?CNAME[c]:c;
+    ttxt.textContent=mine?`Tour ${name} — À VOUS`:`Tour ${name} — ADVERSAIRE`;
+    if(typeof CCSS!=='undefined'&&CCSS[c])ttxt.style.color=CCSS[c];
+  }
+  const badge=document.getElementById('mode-badge');
+  if(badge)badge.textContent=`VOUS : ${localColorLabel()} · EN LIGNE · ${MP.code}${MP.spEnabled?' · ⚡ SP':''}`;
+  orientBoard();
+}
 function applyState(s){
   if(!s?.G)return false;
   MP.applyingRemote=true;
@@ -63,8 +86,8 @@ function applyState(s){
     if(typeof updateTurnUI==='function')updateTurnUI();
     if(typeof updateToggleUI==='function')updateToggleUI();
     const bz=document.getElementById('bottom-zone');if(bz)bz.style.display='flex';
-    const badge=document.getElementById('mode-badge');if(badge)badge.textContent=`EN LIGNE · ${MP.code}${MP.spEnabled?' · ⚡ SP':''}`;
     unlockIfConfirmed();
+    refreshOnlineTurnUI();
     return true;
   }finally{MP.applyingRemote=false}
 }
@@ -85,7 +108,7 @@ async function reconcile(forceRestore=false){
       MP.lastVersion=Number(o.version);MP.active=true;applyState(o.state);save();
     }
     unlockIfConfirmed();
-    if(MP.active){save();if(forceRestore)status(`Reconnecté · version ${MP.lastVersion}`);startResumePoll();return true}
+    if(MP.active){save();refreshOnlineTurnUI();if(forceRestore)status(`Reconnecté · version ${MP.lastVersion}`);startResumePoll();return true}
     return false;
   }catch(e){console.warn('[IN-SECT MP RESUME]',e);if(forceRestore)status(`Reconnexion en attente : ${e.message}`,true);return false}
   finally{reconciling=false}
@@ -102,14 +125,35 @@ if(typeof finishTurn==='function'&&!finishTurn.__mpAuthoritativeLocked){
       MP.awaitingServer=true;MP.awaitingVersion=expected;
       status('Validation du coup…');
     }
+    queueMicrotask(refreshOnlineTurnUI);
     return result;
   };
   finishTurn.__mpAuthoritativeLocked=true;
 }
 if(typeof isHuman==='function'&&!isHuman.__mpAuthoritativeLocked){
   const originalIsHuman=isHuman;
-  isHuman=function(){if(MP.active&&MP.awaitingServer)return false;return originalIsHuman.apply(this,arguments)};
+  isHuman=function(){
+    if((MP.code||MP.secret)&&(!MP.active||!G||!Number.isFinite(Number(MP.lastVersion))))return false;
+    if(MP.active&&MP.awaitingServer)return false;
+    return originalIsHuman.apply(this,arguments);
+  };
   isHuman.__mpAuthoritativeLocked=true;
+}
+if(typeof humanClickCell==='function'&&!humanClickCell.__mpAuthoritativeLocked){
+  const originalHumanClickCell=humanClickCell;
+  humanClickCell=function(){
+    if(MP.code||MP.secret){
+      if(!MP.active||!G||!Number.isFinite(Number(MP.lastVersion))||MP.awaitingServer||MP.applyingRemote)return;
+      if(typeof cur==='function'&&cur()!==MP.localColor)return;
+    }
+    return originalHumanClickCell.apply(this,arguments);
+  };
+  humanClickCell.__mpAuthoritativeLocked=true;
+}
+if(typeof updateTurnUI==='function'&&!updateTurnUI.__mpPerspectiveWrapped){
+  const originalUpdateTurnUI=updateTurnUI;
+  updateTurnUI=function(){const result=originalUpdateTurnUI.apply(this,arguments);refreshOnlineTurnUI();return result};
+  updateTurnUI.__mpPerspectiveWrapped=true;
 }
 
 const originalLeave=typeof MP.leave==='function'?MP.leave:null;
@@ -123,5 +167,5 @@ document.addEventListener('visibilitychange',()=>{if(document.visibilityState===
 window.addEventListener('pagehide',save);window.addEventListener('beforeunload',save);setInterval(save,1000);
 const saved=load();
 if(saved&&!MP.code){MP.code=saved.code;MP.secret=saved.secret;MP.role=saved.role;MP.localColor=saved.localColor;MP.lastVersion=-1;MP.lastPushedTurn=null;reconcile(true)}
-MP.resumeSession=()=>reconcile(true);MP.syncNow=()=>reconcile(false);MP.clearSavedSession=clear;
+MP.resumeSession=()=>reconcile(true);MP.syncNow=()=>reconcile(false);MP.clearSavedSession=clear;MP.refreshPerspective=refreshOnlineTurnUI;
 })();
