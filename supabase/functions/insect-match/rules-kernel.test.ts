@@ -1,7 +1,7 @@
 import { assertEquals, assert } from 'jsr:@std/assert@1'
 import { resolveIntent } from '../_shared/insect-rules-kernel.ts'
 
-function baseSnapshot(){
+function baseSnapshot():any{
   let id=0
   const starts:any={
     yellow:[[0,0,'chef'],[0,1,'assassin'],[0,2,'militant'],[1,0,'reporter'],[1,1,'diplomate'],[1,2,'militant'],[2,0,'militant'],[2,1,'militant'],[2,2,'necromobile']],
