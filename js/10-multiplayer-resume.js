@@ -68,6 +68,14 @@ window.addEventListener('pagehide',save);
 window.addEventListener('beforeunload',save);
 setInterval(save,1500);
 
+function loadIntentController(){
+  if(document.getElementById('insect-mp-intent'))return;
+  const s=document.createElement('script');s.id='insect-mp-intent';s.src='js/09-multiplayer-intent.js';s.async=false;
+  s.onerror=()=>RT.setError('Chargement du contrôleur d’intentions multijoueur impossible.');
+  document.body.appendChild(s);
+}
+loadIntentController();
+
 const saved=load();
 if(saved&&!MP.code){restoreIdentity(saved);reconcile(true)}
 MP.resumeSession=()=>reconcile(true);
