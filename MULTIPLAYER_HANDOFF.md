@@ -254,3 +254,96 @@ Faire **uniquement** ce test minimal. En cas d'échec, diagnostiquer à partir d
 - ne pas remplacer la v4 Supabase par une vieille copie sans comparaison ;
 - ne pas refactorer le moteur solo/IA pour résoudre ce problème ;
 - ne pas ajouter classement/chat/Elo/tournoi avant validation de la synchronisation fondamentale.
+
+## 15. Mise à jour autoritaire — 8 septembre 2026
+
+> **Cette section décrit l'architecture actuelle et supplante les sections historiques 4, 8, 9 et 11 lorsqu'elles parlent de `push` ou de snapshots de gameplay. Les sections précédentes sont conservées comme historique des incidents et décisions.**
+
+### Architecture actuelle
+
+Le 1v1 a été migré vers un serveur réellement autoritaire :
+
+`clic joueur → intention browser-safe → insect-play → noyau de règles serveur → update versionnée → Broadcast Realtime → get(version) → snapshot canonique → rendu`
+
+Rôles des composants :
+- `insect-match` : création/join/matchmaking/vote SP/`get` et **snapshot initial uniquement** ;
+- `insect-play` : résolution de chaque action de gameplay ;
+- `insect-rules-kernel.ts` : règles pures côté serveur ;
+- `09-multiplayer-intent.js` : collecte l'intention sans muter l'état autoritaire ;
+- `09-multiplayer-event-player.js` : joue visuellement l'événement accepté sans muter `G` ;
+- `09-multiplayer-runtime.js` : état explicite de session, verrouillage d'entrée et perspective ;
+- `12-multiplayer-realtime.js` : accélération/wakeup ; le `get` versionné reste la vérité et le filet de récupération ;
+- `10-multiplayer-resume.js` : persiste seulement l'identité de session et restaure depuis le serveur.
+
+Le polling est désormais **strictement en lecture après l'initialisation**. La CI échoue si `js/09-multiplayer.js` réintroduit un `push`, un export `commitState` ou un `commit_turn` de gameplay.
+
+### Protection serveur déployée
+
+Projet : `nczdadkyysrxxcsnsrrn`.
+
+État vérifié le 8 septembre 2026 :
+- `insect-match` **v6 ACTIVE**, `verify_jwt=false` ;
+- `insect-play` **v1 ACTIVE**, `verify_jwt=false`.
+
+Après présence de l'état initial :
+- l'ancien `push` est refusé (`426`) ;
+- `commit_turn` n'est plus un chemin de gameplay ;
+- une action doit fournir la version de base exacte ;
+- le siège authentifié détermine la couleur (`host=yellow`, `guest=red`) ;
+- le serveur vérifie le joueur courant et la légalité de l'intention ;
+- la mise à jour DB est conditionnée à la version courante ;
+- deux actions concurrentes sur la même version ne peuvent pas être acceptées toutes les deux.
+
+Les aléas de règle nécessaires, notamment le fallback de placement du Double Kill et les déclenchements SP, sont décidés côté serveur.
+
+### Validation technique obtenue
+
+La CI couvre runtime/perspective, syntaxe et frontière d'autorité cliente, règles pures et type-check des deux Edge Functions.
+
+Un smoke test **contre les fonctions Supabase réellement déployées** a validé :
+- initialisation `version 1` ;
+- Rouge hors tour refusé ;
+- deux actions Jaune concurrentes sur `version 1` → exactement une acceptée ;
+- passage `version 1 → 2` ;
+- action sur version périmée refusée ;
+- action Rouge valide `version 2 → 3` ;
+- ancien `push` refusé ;
+- reconnexion avec récupération exacte du snapshot canonique ;
+- Broadcast Realtime `state_changed` réellement reçu pour les versions **2 et 3**.
+
+Dernier résultat live :
+
+`LIVE_SMOKE_OK versions=1->2->3 realtime=2,3 wrong-turn=blocked double-action=single-winner stale=blocked legacy-push=blocked reconnect=canonical`
+
+Cette preuve est une **validation technique du protocole déployé**, pas une validation UX sur deux appareils physiques.
+
+### Perspective et identité online
+
+Les coordonnées logiques de la partie ne changent jamais. La perspective est uniquement une projection d'affichage :
+- Rouge conserve sa perspective naturelle en bas ;
+- Jaune reçoit une projection locale qui place son camp en bas ;
+- les insectes ne sont pas retournés par une rotation CSS globale ;
+- le bandeau online distingue explicitement l'identité locale et le tour (`VOUS`, `À VOUS`, `ADVERSAIRE`).
+
+Cette direction vient du test réel ordinateur + téléphone du 8 septembre, où le libellé générique `À vous` et l'absence de perspective locale créaient de la confusion.
+
+### Niveau de preuve au 8 septembre 2026
+
+- **Implémenté : OUI.**
+- **Techniquement testé : OUI**, y compris HTTP, concurrence DB, reconnexion et Realtime déployé.
+- **Vérifié après cette migration sur deux appareils physiques : NON.**
+- **Robuste pour des joueurs externes : NON revendiqué.**
+
+### Prochaine étape obligatoire
+
+Faire un nouveau test minimal ordinateur + téléphone sur la version intégrant cette migration :
+1. rechargement complet / attention au cache PWA ;
+2. créer/rejoindre une nouvelle partie ;
+3. vérifier l'identité locale `VOUS : JAUNE` / `VOUS : ROUGE` ;
+4. vérifier que chacun voit son camp en bas ;
+5. Rouge ne doit pouvoir effectuer aucune action avant le coup Jaune ;
+6. Jaune joue un seul coup → serveur attendu `1 → 2` → Rouge voit automatiquement le coup ;
+7. Rouge joue un seul coup → serveur attendu `2 → 3` → Jaune voit automatiquement le coup ;
+8. aucune pièce locale ne doit « revenir en arrière » après synchronisation.
+
+Seulement après ce succès, passer aux scénarios de robustesse : arrière-plan/veille, changement d'onglet, reload/PWA, reconnexion, double action, latence, abandon et fin de partie.
