@@ -1,0 +1,28 @@
+name: IN-SECT multiplayer tests
+
+on:
+  push:
+    branches:
+      - main
+      - multiplayer-authoritative-runtime
+    paths:
+      - 'js/09-multiplayer-runtime.js'
+      - 'tests/**'
+      - '.github/workflows/insect-multiplayer-tests.yml'
+  pull_request:
+    paths:
+      - 'js/09-multiplayer-runtime.js'
+      - 'tests/**'
+      - '.github/workflows/insect-multiplayer-tests.yml'
+
+jobs:
+  multiplayer-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Runtime and perspective tests
+        run: node --test tests/multiplayer-runtime.test.js
