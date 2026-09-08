@@ -6,10 +6,15 @@ on:
       - main
       - multiplayer-authoritative-runtime
     paths:
+      - 'js/04-board.js'
       - 'js/08-boot.js'
       - 'js/09-multiplayer-runtime.js'
       - 'js/09-multiplayer.js'
+      - 'js/09-multiplayer-event-player.js'
       - 'js/09-multiplayer-intent.js'
+      - 'js/10-multiplayer-resume.js'
+      - 'js/11-multiplayer-ready.js'
+      - 'js/12-multiplayer-realtime.js'
       - 'supabase/functions/_shared/**'
       - 'supabase/functions/insect-play/**'
       - 'supabase/functions/insect-match/**'
@@ -17,10 +22,15 @@ on:
       - '.github/workflows/insect-multiplayer-tests.yml'
   pull_request:
     paths:
+      - 'js/04-board.js'
       - 'js/08-boot.js'
       - 'js/09-multiplayer-runtime.js'
       - 'js/09-multiplayer.js'
+      - 'js/09-multiplayer-event-player.js'
       - 'js/09-multiplayer-intent.js'
+      - 'js/10-multiplayer-resume.js'
+      - 'js/11-multiplayer-ready.js'
+      - 'js/12-multiplayer-realtime.js'
       - 'supabase/functions/_shared/**'
       - 'supabase/functions/insect-play/**'
       - 'supabase/functions/insect-match/**'
@@ -40,10 +50,25 @@ jobs:
         run: node --test tests/multiplayer-runtime.test.js
       - name: Browser multiplayer syntax and boot wiring
         run: |
+          node --check js/04-board.js
           node --check js/08-boot.js
+          node --check js/09-multiplayer-runtime.js
           node --check js/09-multiplayer.js
+          node --check js/09-multiplayer-event-player.js
           node --check js/09-multiplayer-intent.js
+          node --check js/10-multiplayer-resume.js
+          node --check js/11-multiplayer-ready.js
+          node --check js/12-multiplayer-realtime.js
+          grep -q "insect-mp-event-player" js/08-boot.js
           grep -q "insect-mp-intent" js/08-boot.js
+      - name: Authoritative client boundary
+        run: |
+          test "$(grep -o "api('commit_turn'" js/09-multiplayer.js | wc -l)" -eq 1
+          ! grep -q "api('push'" js/09-multiplayer.js
+          ! grep -q "commitState:" js/09-multiplayer.js
+          grep -q "async function gamePoll(){if(!MP.code||!MP.secret||MP.eventPlayback)return;try{await syncNow(false)}" js/09-multiplayer.js
+          grep -q "ACTION_API" js/09-multiplayer-intent.js
+          grep -q "play_action" js/09-multiplayer-intent.js
 
   authoritative-rules:
     runs-on: ubuntu-latest
