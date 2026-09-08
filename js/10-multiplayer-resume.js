@@ -1,171 +1,75 @@
-/* IN-SECT — reprise robuste + verrouillage autoritaire des tours multijoueur. */
+/* IN-SECT — persistance de session et récupération autoritaire multijoueur. Aucun wrapper du moteur. */
 (function(){
 'use strict';
-const KEY='insect_mp_active_session_v1';
+const KEY='insect_mp_active_session_v2';
+const LEGACY_KEY='insect_mp_active_session_v1';
+const MP=window.INSECT_MP;
+const RT=window.INSECT_MP_RUNTIME;
+if(!MP||!RT||!/^https:\/\//i.test(String(MP.api||'')))return;
 let resumeTimer=null;
 let reconciling=false;
-const MP=window.INSECT_MP;
-if(!MP||!/^https:\/\//i.test(String(MP.api||'')))return;
-MP.awaitingServer=false;
-MP.awaitingVersion=null;
-MP.realtimeTopic=MP.realtimeTopic||null;
 
 function status(message,error=false){
   const el=document.getElementById('mp-status');
   if(el){el.textContent=message||'';el.style.color=error?'#FF6680':'#A9A3D6'}
 }
 function snapshot(){
-  if(!MP.active||!MP.code||!MP.secret||!MP.role||!MP.localColor)return null;
-  return{schema:1,code:String(MP.code),secret:String(MP.secret),role:String(MP.role),localColor:String(MP.localColor),savedAt:Date.now()};
+  if(!MP.code||!MP.secret||!MP.role||!MP.localColor)return null;
+  return{schema:2,code:String(MP.code),secret:String(MP.secret),role:String(MP.role),localColor:String(MP.localColor),savedAt:Date.now()};
 }
-function save(){const s=snapshot();if(!s)return;try{localStorage.setItem(KEY,JSON.stringify(s))}catch(_){}}
-function clear(){try{localStorage.removeItem(KEY)}catch(_){}}
+function save(){const s=snapshot();if(!s)return;try{localStorage.setItem(KEY,JSON.stringify(s));localStorage.removeItem(LEGACY_KEY)}catch(_){}}
+function clear(){try{localStorage.removeItem(KEY);localStorage.removeItem(LEGACY_KEY)}catch(_){}}
+function valid(s){return!!(s&&[1,2].includes(s.schema)&&s.code&&s.secret&&['host','guest'].includes(s.role)&&['yellow','red'].includes(s.localColor))}
 function load(){
   try{
-    const s=JSON.parse(localStorage.getItem(KEY)||'null');
-    if(!s||s.schema!==1||!s.code||!s.secret||!['host','guest'].includes(s.role)||!['yellow','red'].includes(s.localColor))return null;
-    return s;
-  }catch(_){return null}
+    const modern=JSON.parse(localStorage.getItem(KEY)||'null');if(valid(modern))return modern;
+    const legacy=JSON.parse(localStorage.getItem(LEGACY_KEY)||'null');if(valid(legacy))return legacy;
+  }catch(_){}
+  return null;
 }
-async function apiGet(since){
-  const r=await fetch(MP.api,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'get',code:MP.code,secret:MP.secret,since}),cache:'no-store'});
-  let d=null;try{d=await r.json()}catch(_){}
-  if(!r.ok||!d||d.ok===false)throw new Error(d?.error||`Erreur serveur (${r.status})`);
-  return d;
+function stop(){if(resumeTimer)clearInterval(resumeTimer);resumeTimer=null}
+function start(){stop();resumeTimer=setInterval(()=>{if(document.visibilityState==='visible')reconcile(false)},1000)}
+function restoreIdentity(s){
+  MP.code=String(s.code);MP.secret=String(s.secret);MP.role=String(s.role);MP.localColor=String(s.localColor);
+  MP.lastVersion=-1;MP.lastCommittedTurn=null;MP.authoritativeState=null;
+  RT.attachSession({code:MP.code,playerId:MP.role,controlledColor:MP.localColor,seat:MP.localColor==='yellow'?'north-west':'south-east',participants:[{playerId:'host',controlledColor:'yellow',seat:'north-west'},{playerId:'guest',controlledColor:'red',seat:'south-east'}],connection:'reconnecting',phase:RT.STATES.RECONNECTING});
 }
-function turnKey(){if(!G)return null;return`${Number(G.turn||0)}:${Number(G.idx||0)}:${Number(_gameTurns||0)}`}
-function rebuild(){
-  G.board=Array.from({length:9},()=>Array(9).fill(null));
-  for(const color of Object.keys(G.players||{}))for(const p of G.players[color]?.pieces||[]){
-    if(Number.isInteger(p.r)&&Number.isInteger(p.c)&&p.r>=0&&p.r<9&&p.c>=0&&p.c<9&&(!p.dead||G.board[p.r][p.c]==null))G.board[p.r][p.c]=p;
-  }
-}
-function unlockIfConfirmed(){
-  if(!MP.awaitingServer)return;
-  if(Number.isFinite(MP.awaitingVersion)&&Number(MP.lastVersion)>=Number(MP.awaitingVersion)){
-    MP.awaitingServer=false;
-    MP.awaitingVersion=null;
-  }
-}
-function localColorLabel(){return MP.localColor==='yellow'?'JAUNE':MP.localColor==='red'?'ROUGE':String(MP.localColor||'').toUpperCase()}
-function orientBoard(){
-  const board=document.getElementById('board');
-  if(!board)return;
-  const rotate=MP.active&&MP.localColor==='yellow';
-  board.style.transform=rotate?'rotate(180deg)':'';
-  board.style.transformOrigin='center center';
-  for(const piece of board.querySelectorAll('.piece'))piece.style.transform=rotate?'rotate(180deg)':'';
-}
-function refreshOnlineTurnUI(){
-  if(!MP.active||!G||typeof cur!=='function')return;
-  const c=cur();if(!c)return;
-  const ttxt=document.getElementById('turn-txt');
-  if(ttxt){
-    const mine=c===MP.localColor;
-    const name=(typeof CNAME!=='undefined'&&CNAME[c])?CNAME[c]:c;
-    ttxt.textContent=mine?`Tour ${name} — À VOUS`:`Tour ${name} — ADVERSAIRE`;
-    if(typeof CCSS!=='undefined'&&CCSS[c])ttxt.style.color=CCSS[c];
-  }
-  const badge=document.getElementById('mode-badge');
-  if(badge)badge.textContent=`VOUS : ${localColorLabel()} · EN LIGNE · ${MP.code}${MP.spEnabled?' · ⚡ SP':''}`;
-  orientBoard();
-}
-function applyState(s){
-  if(!s?.G)return false;
-  MP.applyingRemote=true;
-  try{
-    _mode=1;_aiLevel=s.aiLevel||1;_selColor=MP.localColor;_optSP=!!s.optSP;
-    _uid=Number(s.uid||0);_gameTurns=Number(s.turns||0);_gameCaps=Number(s.caps||0);_moveLog=Array.isArray(s.moveLog)?s.moveLog:[];
-    G=s.G;G.human=MP.localColor;G.mode1=true;G.sel=null;G.phase='select';G.spPaused=false;
-    for(const color of Object.keys(G.players||{}))G.players[color].human=true;
-    rebuild();MP.lastPushedTurn=turnKey();
-    if(typeof showScreen==='function')showScreen('game');
-    if(typeof buildBoard==='function')buildBoard();
-    if(typeof renderBoard==='function')renderBoard();
-    if(typeof renderPlayers==='function')renderPlayers();
-    if(typeof updateTurnUI==='function')updateTurnUI();
-    if(typeof updateToggleUI==='function')updateToggleUI();
-    const bz=document.getElementById('bottom-zone');if(bz)bz.style.display='flex';
-    unlockIfConfirmed();
-    refreshOnlineTurnUI();
-    return true;
-  }finally{MP.applyingRemote=false}
-}
-function startResumePoll(){if(resumeTimer)clearInterval(resumeTimer);resumeTimer=setInterval(()=>{if(document.visibilityState==='visible')reconcile(false)},500)}
-function stopResumePoll(){if(resumeTimer)clearInterval(resumeTimer);resumeTimer=null}
 async function reconcile(forceRestore=false){
   if(reconciling)return false;
   const saved=load();
-  if(forceRestore&&!MP.code&&saved){MP.code=saved.code;MP.secret=saved.secret;MP.role=saved.role;MP.localColor=saved.localColor;MP.lastVersion=-1;MP.lastPushedTurn=null}
-  if(!MP.code||!MP.secret)return false;
-  reconciling=true;if(forceRestore)status('Reconnexion à la partie…');
+  if(forceRestore&&!MP.code&&saved)restoreIdentity(saved);
+  if(!MP.code||!MP.secret||typeof MP.syncNow!=='function')return false;
+  reconciling=true;
+  if(forceRestore){RT.beginReconnect();status('Reconnexion à la partie…')}
   try{
-    const o=await apiGet(Number.isFinite(MP.lastVersion)?MP.lastVersion:-1);
-    if(o.realtime_topic)MP.realtimeTopic=String(o.realtime_topic);
-    if(o.status==='finished'){MP.active=false;MP.awaitingServer=false;MP.awaitingVersion=null;MP.realtimeTopic=null;clear();stopResumePoll();status('Partie terminée.');return false}
-    if(o.sp_decided)MP.spEnabled=!!o.sp_enabled;
-    if(o.state&&Number(o.version)>Number(MP.lastVersion)){
-      MP.lastVersion=Number(o.version);MP.active=true;applyState(o.state);save();
-    }
-    unlockIfConfirmed();
-    if(MP.active){save();refreshOnlineTurnUI();if(forceRestore)status(`Reconnecté · version ${MP.lastVersion}`);startResumePoll();return true}
+    await MP.syncNow(!!forceRestore);
+    if(MP.code&&MP.secret){save();start();if(forceRestore)status(`Partie récupérée · version ${MP.lastVersion}`);return true}
     return false;
-  }catch(e){console.warn('[IN-SECT MP RESUME]',e);if(forceRestore)status(`Reconnexion en attente : ${e.message}`,true);return false}
-  finally{reconciling=false}
+  }catch(error){
+    console.warn('[IN-SECT MP RESUME]',error);
+    RT.setError(`Reconnexion : ${error.message||error}`);
+    if(forceRestore)status(`Reconnexion impossible : ${error.message||error}`,true);
+    return false;
+  }finally{reconciling=false}
 }
 
-/* Une action locale terminée devient provisoire jusqu'à confirmation du serveur. */
-if(typeof finishTurn==='function'&&!finishTurn.__mpAuthoritativeLocked){
-  const originalFinishTurn=finishTurn;
-  finishTurn=function(){
-    const mine=MP.active&&G&&!G.over&&typeof cur==='function'&&cur()===MP.localColor;
-    const expected=mine&&Number.isFinite(MP.lastVersion)?Number(MP.lastVersion)+1:null;
-    const result=originalFinishTurn.apply(this,arguments);
-    if(mine&&!MP.applyingRemote){
-      MP.awaitingServer=true;MP.awaitingVersion=expected;
-      status('Validation du coup…');
-    }
-    queueMicrotask(refreshOnlineTurnUI);
-    return result;
-  };
-  finishTurn.__mpAuthoritativeLocked=true;
-}
-if(typeof isHuman==='function'&&!isHuman.__mpAuthoritativeLocked){
-  const originalIsHuman=isHuman;
-  isHuman=function(){
-    if((MP.code||MP.secret)&&(!MP.active||!G||!Number.isFinite(Number(MP.lastVersion))))return false;
-    if(MP.active&&MP.awaitingServer)return false;
-    return originalIsHuman.apply(this,arguments);
-  };
-  isHuman.__mpAuthoritativeLocked=true;
-}
-if(typeof humanClickCell==='function'&&!humanClickCell.__mpAuthoritativeLocked){
-  const originalHumanClickCell=humanClickCell;
-  humanClickCell=function(){
-    if(MP.code||MP.secret){
-      if(!MP.active||!G||!Number.isFinite(Number(MP.lastVersion))||MP.awaitingServer||MP.applyingRemote)return;
-      if(typeof cur==='function'&&cur()!==MP.localColor)return;
-    }
-    return originalHumanClickCell.apply(this,arguments);
-  };
-  humanClickCell.__mpAuthoritativeLocked=true;
-}
-if(typeof updateTurnUI==='function'&&!updateTurnUI.__mpPerspectiveWrapped){
-  const originalUpdateTurnUI=updateTurnUI;
-  updateTurnUI=function(){const result=originalUpdateTurnUI.apply(this,arguments);refreshOnlineTurnUI();return result};
-  updateTurnUI.__mpPerspectiveWrapped=true;
+const originalLeave=MP.leave;
+MP.leave=function(){clear();stop();return originalLeave?originalLeave.apply(this,arguments):undefined};
+for(const name of ['create','join','findOpponent']){
+  const original=MP[name];
+  if(typeof original==='function')MP[name]=async function(){const result=await original.apply(this,arguments);setTimeout(save,0);return result};
 }
 
-const originalLeave=typeof MP.leave==='function'?MP.leave:null;
-if(originalLeave)MP.leave=function(){clear();stopResumePoll();MP.awaitingServer=false;MP.awaitingVersion=null;MP.realtimeTopic=null;return originalLeave.apply(this,arguments)};
-for(const name of ['create','join']){
-  const original=typeof MP[name]==='function'?MP[name]:null;
-  if(original)MP[name]=async function(){const r=await original.apply(this,arguments);setTimeout(save,0);return r};
-}
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='hidden')save();
+  else if(MP.code&&MP.secret){RT.beginReconnect();reconcile(false)}
+});
+window.addEventListener('pagehide',save);
+window.addEventListener('beforeunload',save);
+setInterval(save,1500);
 
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')save();else reconcile(false)});
-window.addEventListener('pagehide',save);window.addEventListener('beforeunload',save);setInterval(save,1000);
 const saved=load();
-if(saved&&!MP.code){MP.code=saved.code;MP.secret=saved.secret;MP.role=saved.role;MP.localColor=saved.localColor;MP.lastVersion=-1;MP.lastPushedTurn=null;reconcile(true)}
-MP.resumeSession=()=>reconcile(true);MP.syncNow=()=>reconcile(false);MP.clearSavedSession=clear;MP.refreshPerspective=refreshOnlineTurnUI;
+if(saved&&!MP.code){restoreIdentity(saved);reconcile(true)}
+MP.resumeSession=()=>reconcile(true);
+MP.clearSavedSession=clear;
 })();
