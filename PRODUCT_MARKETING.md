@@ -125,7 +125,14 @@ Ajouter les résultats futurs sous la forme :
 - Décision éventuelle :
 - À retester :
 
-Aucun résultat joueur suffisamment utile n’est encore consigné ici au 2026-09-08.
+### 2026-09-08 — 1v1 réel ordinateur + téléphone
+- Contexte : test multijoueur réel ; Jaune sur ordinateur, Rouge sur téléphone.
+- Niveau de preuve : **OBSERVATION + RETOUR JOUEUR**.
+- Ce qui s’est passé : avant le premier coup Jaune confirmé par le serveur, le joueur Rouge pouvait déplacer localement ses pièces alors que ce n’était pas son tour ; après synchronisation du coup Jaune, ces déplacements provisoires disparaissaient et les pièces rouges revenaient à l’état serveur.
+- Friction de compréhension : les deux appareils affichaient initialement `Tour de la colonie Jaune — À vous`, ce qui a fait croire au joueur Rouge que c’était son tour. Une fois la partie réellement synchronisée, la couleur du tour était compréhensible mais la mention générique `À vous` restait trompeuse.
+- Friction d’identité/orientation : le joueur doit savoir immédiatement quelle colonie il contrôle et se percevoir depuis son propre camp. Pour le 1v1 multijoueur, chaque appareil doit présenter sa colonie locale en bas du plateau, à la manière d’une perspective personnelle plutôt que d’un plateau identique sur les deux écrans.
+- Décision : verrouiller toute entrée multijoueur avant réception de l’état serveur initial et hors tour local ; afficher explicitement `VOUS : JAUNE/ROUGE`, distinguer `À VOUS` et `ADVERSAIRE`, et orienter le plateau 1v1 pour placer la colonie locale en bas.
+- À retester : vérifier sur les deux appareils que Rouge ne peut plus déplacer avant le premier coup Jaune ; vérifier que Jaune voit son camp en bas sur son appareil et Rouge son camp en bas sur le sien ; vérifier alternance version serveur et application automatique.
 
 ## 10. Décisions produit/marketing durables
 
@@ -136,6 +143,11 @@ Aucun résultat joueur suffisamment utile n’est encore consigné ici au 2026-0
 
 ### 2026-09-08 — UX : profondeur par les décisions
 **Décision :** viser une manipulation très simple ; conserver la profondeur dans les choix tactiques plutôt que dans l’interface.
+
+### 2026-09-08 — Identité locale en multijoueur
+**Décision :** en multijoueur, l’interface doit distinguer la vérité du tour de l’identité du joueur. L’état partagé peut contenir plusieurs joueurs humains, mais `À VOUS` ne doit apparaître que si la couleur courante correspond à la couleur locale. Le joueur doit voir explicitement sa couleur et, en 1v1, son camp depuis le bas du plateau.
+
+**Direction future 4 joueurs :** conserver le principe d’une perspective personnelle ; l’objectif exprimé est que le joueur local soit présenté depuis le bas/droite. À concevoir et tester au moment du vrai multijoueur 4 joueurs, sans modifier maintenant le mode 3 IA historique.
 
 ### 2026-09-08 — Marketing fondé sur les preuves
 **Décision :** maintenir explicitement les niveaux HYPOTHÈSE / OBSERVATION / RETOUR JOUEUR / COMPORTEMENT MESURÉ / CONCLUSION CONFIRMÉE.
