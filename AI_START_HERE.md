@@ -4,7 +4,7 @@ Point d’entrée obligatoire pour tout agent IA reprenant IN-SECT.
 
 ## Contexte transversal
 
-IN-SECT appartient à l'écosystème **`ludodulac/Grand-p-re-`**. Le slug GitHub de Grand Père utilise des tirets à la place des caractères accentués. En nouvelle conversation : lire Grand Père `AI_START_HERE.md`, la fiche IN-SECT via `projects/_INDEX.md` et `LOOP_ENGINEERING.md`, puis revenir ici. **IN-SECT reste la vérité sur règles, code, backend multijoueur et état déployé.**
+IN-SECT appartient à l'écosystème **`ludodulac/Grand-pere`**. Grand Père est documenté dans le dépôt `ludodulac/Grand-pere`. En nouvelle conversation : lire Grand Père `AI_START_HERE.md`, la fiche IN-SECT via `projects/_INDEX.md` et `LOOP_ENGINEERING.md`, puis revenir ici. **IN-SECT reste la vérité sur règles, code, backend multijoueur et état déployé.**
 
 ## Comprendre avant de modifier
 
