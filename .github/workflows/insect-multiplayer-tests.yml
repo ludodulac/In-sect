@@ -46,10 +46,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Runtime and perspective tests
-        run: node --test tests/multiplayer-runtime.test.js
+      - name: Runtime, perspective and solo-input regression tests
+        run: node --test tests/multiplayer-runtime.test.js tests/solo-input-regression.test.js
       - name: Browser multiplayer syntax and boot wiring
         run: |
+          node --check js/01-core.js
+          node --check js/03-nav-menu.js
           node --check js/04-board.js
           node --check js/08-boot.js
           node --check js/09-multiplayer-runtime.js
@@ -63,7 +65,7 @@ jobs:
           grep -q "insect-mp-intent" js/08-boot.js
       - name: Authoritative client boundary
         run: |
-          test "$(grep -o "api('commit_turn'" js/09-multiplayer.js | wc -l)" -eq 1
+          ! grep -q "api('commit_turn'" js/09-multiplayer.js
           ! grep -q "api('push'" js/09-multiplayer.js
           ! grep -q "commitState:" js/09-multiplayer.js
           grep -q "async function gamePoll(){if(!MP.code||!MP.secret||MP.eventPlayback)return;try{await syncNow(false)}" js/09-multiplayer.js
