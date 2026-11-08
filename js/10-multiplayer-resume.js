@@ -36,7 +36,7 @@ function restoreIdentity(s){
 }
 async function reconcile(forceRestore=false){
   if(reconciling)return false;
-  const saved=load();
+  const saved=window.INSECT_SOLO_SELECTED?null:load();
   if(forceRestore&&!MP.code&&saved)restoreIdentity(saved);
   if(!MP.code||!MP.secret||typeof MP.syncNow!=='function')return false;
   reconciling=true;
@@ -76,7 +76,7 @@ function loadIntentController(){
 }
 loadIntentController();
 
-const saved=load();
+const saved=window.INSECT_SOLO_SELECTED?null:load();
 if(saved&&!MP.code){restoreIdentity(saved);reconcile(true)}
 MP.resumeSession=()=>reconcile(true);
 MP.clearSavedSession=clear;
