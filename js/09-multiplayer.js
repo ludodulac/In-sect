@@ -78,10 +78,12 @@ function applyState(state,version,event=null){
   }finally{MP.applyingRemote=false}
 }
 async function consumeUpdate(result){
+  const sessionCode=MP.code,sessionSecret=MP.secret;
   const version=Number(result.version);if(!result.state||!Number.isFinite(version)||version<=Number(MP.lastVersion))return false;
   const event=result.event||result.state?._mp_event||null;
   const shouldAnimate=event&&event.actor_color&&event.actor_color!==MP.localColor&&MP.active&&G&&Number(event.base_version)===Number(MP.lastVersion)&&typeof MP.playAcceptedEvent==='function';
   if(shouldAnimate)await MP.playAcceptedEvent(event,version);
+  if(MP.code!==sessionCode||MP.secret!==sessionSecret)return false;
   return applyState(result.state,version,event);
 }
 
@@ -115,7 +117,9 @@ async function startHost(){
 }
 async function syncNow(force=false){
   if(!MP.code||!MP.secret)return false;
-  const since=force?-1:(Number.isFinite(MP.lastVersion)?MP.lastVersion:-1);const result=await api('get',{code:MP.code,secret:MP.secret,since});
+  const sessionCode=MP.code,sessionSecret=MP.secret;
+  const since=force?-1:(Number.isFinite(MP.lastVersion)?MP.lastVersion:-1);const result=await api('get',{code:sessionCode,secret:sessionSecret,since});
+  if(MP.code!==sessionCode||MP.secret!==sessionSecret)return false;
   if(result.realtime_topic)MP.realtimeTopic=String(result.realtime_topic);voteUI(result);
   if(result.status==='waiting'){status('En attente de votre adversaire…');return false}
   if(!result.sp_decided){status('Votez pour les super pouvoirs.');return false}

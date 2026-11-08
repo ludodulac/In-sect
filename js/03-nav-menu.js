@@ -40,6 +40,7 @@ function sendFeedback() {
 }
 
 function resumeGame() {
+  enterSoloMode();
   if (!loadSave()) { updateStatusBar(); return; }
   showScreen('game');
   buildBoard();

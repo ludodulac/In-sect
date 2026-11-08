@@ -314,7 +314,22 @@ function recordWin()  { clearSave(); lsSet(_scoreKey('wins'),  parseInt(lsGet(_s
 function recordLoss() { clearSave(); lsSet(_scoreKey('losses'),parseInt(lsGet(_scoreKey('losses'),'0'),10) + 1); updateStatusBar(); }
 
 
+// Une sélection explicite du mode solo doit désactiver toute ancienne session online.
+// Sinon les écouteurs multijoueurs (capture de clic) bloquent l'échiquier solo.
+function enterSoloMode() {
+  window.INSECT_SOLO_SELECTED = true;
+  const multiplayer = window.INSECT_MP;
+  if (multiplayer && typeof multiplayer.leave === 'function') multiplayer.leave();
+  try {
+    localStorage.removeItem('insect_mp_active_session_v2');
+    localStorage.removeItem('insect_mp_active_session_v1');
+  } catch (_) {}
+  const runtime = window.INSECT_MP_RUNTIME;
+  if (runtime && runtime.isOnline()) runtime.detach();
+}
+
 function tryStartGame() {
+  enterSoloMode();
   startGame();
 }
 
